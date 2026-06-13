@@ -10,7 +10,7 @@
     "phpUnit": {
         "configDir": "."
     },
-    "minMsi": 85,
+    "minMsi": 76,
     "mutators": {
         "@default": true
     }

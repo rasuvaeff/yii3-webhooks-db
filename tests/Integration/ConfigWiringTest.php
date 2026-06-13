@@ -17,6 +17,7 @@ use Yiisoft\Db\Cache\SchemaCache;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Db\Sqlite\Connection as SqliteConnection;
 use Yiisoft\Db\Sqlite\Driver as SqliteDriver;
+use Yiisoft\Test\Support\Clock\StaticClock;
 use Yiisoft\Test\Support\SimpleCache\MemorySimpleCache;
 
 #[CoversNothing]
@@ -69,11 +70,6 @@ final class ConfigWiringTest extends TestCase
 
     private function fixedClock(): ClockInterface
     {
-        return new class implements ClockInterface {
-            public function now(): DateTimeImmutable
-            {
-                return new DateTimeImmutable('2026-06-12 10:00:00');
-            }
-        };
+        return new StaticClock(new DateTimeImmutable('2026-06-12 10:00:00'));
     }
 }
