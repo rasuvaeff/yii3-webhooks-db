@@ -1,0 +1,28 @@
+# yii3-webhooks-db
+
+## Install
+
+```bash
+composer require rasuvaeff/yii3-webhooks-db
+```
+
+## Rules
+
+- Use with `rasuvaeff/yii3-webhooks` core.
+- `DbNonceStorage::add()` is atomic: true means accepted, false means duplicate replay.
+- `DbWebhookDeliveryStorage` persists delivery attempts and never stores endpoint secrets.
+- Config-plugin DI binds only `WebhookDeliveryStorage` and `NonceStorage`.
+
+## API reference
+
+```php
+use Rasuvaeff\Yii3WebhooksDb\DbNonceStorage;
+use Rasuvaeff\Yii3WebhooksDb\DbWebhookDeliveryStorage;
+
+$deliveryStorage = new DbWebhookDeliveryStorage(db: $db, table: 'webhook_deliveries');
+$nonceStorage = new DbNonceStorage(db: $db, table: 'webhook_nonces');
+
+$deliveryStorage->save(delivery: $delivery);
+$pending = $deliveryStorage->findPending(limit: 100);
+$accepted = $nonceStorage->add(nonce: $signature->getValue());
+```
