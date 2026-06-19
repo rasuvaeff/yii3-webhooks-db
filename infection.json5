@@ -12,45 +12,6 @@
     },
     "minMsi": 85,
     "mutators": {
-        "@default": true,
-        // DateTimeSerializer::utc: ??= → = is equivalent; lazy init just allocates a new
-        // DateTimeZone on every call instead of caching it — the returned value is identical.
-        "AssignCoalesce": {
-            "ignore": ["Rasuvaeff\\Yii3WebhooksDb\\DateTimeSerializer::utc"]
-        },
-        // DbNonceStorage::add: > 0 → >= 0 is equivalent; Yii's execute() returns 1 on a
-        // successful INSERT or throws IntegrityException on duplicate — it never returns 0.
-        "GreaterThan": {
-            "ignore": ["Rasuvaeff\\Yii3WebhooksDb\\DbNonceStorage::add"]
-        },
-        // DbWebhookDeliveryStorage::fromRow: $row['attempts'] ?? 0 → ?? 1 / ?? -1
-        // The fallback only fires when 'attempts' is NULL in the row, which cannot happen
-        // because the schema declares `attempts INTEGER NOT NULL DEFAULT 0`.
-        "IncrementInteger": {
-            "ignore": ["Rasuvaeff\\Yii3WebhooksDb\\DbWebhookDeliveryStorage::fromRow"]
-        },
-        "DecrementInteger": {
-            "ignore": ["Rasuvaeff\\Yii3WebhooksDb\\DbWebhookDeliveryStorage::fromRow"]
-        },
-        // DbWebhookDeliveryStorage: stringValue() / nullableString() / nullableDateTime()
-        // defensive branches (!is_string / throw) are unreachable via SQLite: all VARCHAR/TEXT
-        // columns in Yii PDO-SQLite always return PHP strings, so the non-string path is
-        // untriggerable through the test interface without mocking the DB driver.
-        "Concat": {
-            "ignore": ["Rasuvaeff\\Yii3WebhooksDb\\DbWebhookDeliveryStorage::stringValue"]
-        },
-        "ConcatOperandRemoval": {
-            "ignore": ["Rasuvaeff\\Yii3WebhooksDb\\DbWebhookDeliveryStorage::stringValue"]
-        },
-        "Throw_": {
-            "ignore": [
-                "Rasuvaeff\\Yii3WebhooksDb\\DbWebhookDeliveryStorage::stringValue",
-                "Rasuvaeff\\Yii3WebhooksDb\\DbWebhookDeliveryStorage::nullableString",
-                "Rasuvaeff\\Yii3WebhooksDb\\DbWebhookDeliveryStorage::nullableDateTime"
-            ]
-        },
-        "LogicalNot": {
-            "ignore": ["Rasuvaeff\\Yii3WebhooksDb\\DbWebhookDeliveryStorage::nullableString"]
-        }
+        "@default": true
     }
 }

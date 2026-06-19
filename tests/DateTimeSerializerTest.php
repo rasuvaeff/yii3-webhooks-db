@@ -113,6 +113,22 @@ final class DateTimeSerializerTest extends TestCase
         $this->assertSame($value, $formatted);
     }
 
+    #[Test]
+    public function utcTimezoneIsCachedAcrossCalls(): void
+    {
+        $prop = new \ReflectionProperty(DateTimeSerializer::class, 'utc');
+        $prop->setValue(null, null);
+
+        $dt = new DateTimeImmutable('2026-06-12 10:00:00', new DateTimeZone('UTC'));
+        DateTimeSerializer::format($dt);
+        $tz1 = $prop->getValue(null);
+
+        DateTimeSerializer::format($dt);
+        $tz2 = $prop->getValue(null);
+
+        $this->assertSame($tz1, $tz2);
+    }
+
     /**
      * @return iterable<string, array{0: string}>
      */

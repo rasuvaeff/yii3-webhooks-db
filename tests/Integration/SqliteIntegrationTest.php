@@ -282,6 +282,57 @@ final class SqliteIntegrationTest extends TestCase
     }
 
     #[Test]
+    public function findPendingThrowsWhenRequiredFieldIsNull(): void
+    {
+        $this->db->createCommand(sql: 'CREATE TABLE wd_null_field (id TEXT PRIMARY KEY, event_id TEXT, event_type TEXT NOT NULL, endpoint_url TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_attempt_at TEXT, last_error TEXT)')->execute();
+        $this->db->createCommand(sql: "INSERT INTO wd_null_field VALUES ('d1', NULL, 'type', 'https://example.com', 'pending', '2026-06-12 10:00:00', 0, NULL, NULL)")->execute();
+
+        $storage = new DbWebhookDeliveryStorage(db: $this->db, table: 'wd_null_field');
+
+        $this->expectException(\UnexpectedValueException::class);
+        $this->expectExceptionMessage('Invalid webhook delivery row field "event_id"');
+
+        $storage->findPending(limit: 10);
+    }
+
+    #[Test]
+    public function nullableStringThrowsOnNonStringValue(): void
+    {
+        $storage = new DbWebhookDeliveryStorage(db: $this->db);
+        $method = new \ReflectionMethod(DbWebhookDeliveryStorage::class, 'nullableString');
+
+        $this->expectException(\UnexpectedValueException::class);
+        $this->expectExceptionMessage('Invalid nullable string field');
+
+        $method->invoke($storage, 42);
+    }
+
+    #[Test]
+    public function nullableDateTimeThrowsOnNonStringValue(): void
+    {
+        $storage = new DbWebhookDeliveryStorage(db: $this->db);
+        $method = new \ReflectionMethod(DbWebhookDeliveryStorage::class, 'nullableDateTime');
+
+        $this->expectException(\UnexpectedValueException::class);
+        $this->expectExceptionMessage('Invalid nullable datetime field');
+
+        $method->invoke($storage, 42);
+    }
+
+    #[Test]
+    public function getAttemptsDefaultsToZeroWhenNullInDatabase(): void
+    {
+        $this->db->createCommand(sql: 'CREATE TABLE wd_null_attempts (id TEXT PRIMARY KEY, event_id TEXT NOT NULL, event_type TEXT NOT NULL, endpoint_url TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, attempts INTEGER, last_attempt_at TEXT, last_error TEXT)')->execute();
+        $this->db->createCommand(sql: "INSERT INTO wd_null_attempts VALUES ('d1', 'e1', 'type', 'https://example.com', 'pending', '2026-06-12 10:00:00', NULL, NULL, NULL)")->execute();
+
+        $storage = new DbWebhookDeliveryStorage(db: $this->db, table: 'wd_null_attempts');
+
+        $loaded = $storage->getById(id: 'd1');
+        $this->assertNotNull($loaded);
+        $this->assertSame(0, $loaded->getAttempts());
+    }
+
+    #[Test]
     public function findPendingThrowsOnInvalidLastAttemptAtFormat(): void
     {
         $this->db->createCommand(sql: "INSERT INTO webhook_deliveries (id, event_id, event_type, endpoint_url, status, created_at, attempts, last_attempt_at) VALUES ('d1', 'event-1', 'type', 'url', 'pending', '2026-06-12 10:00:00', 0, 'not-a-date')")->execute();
