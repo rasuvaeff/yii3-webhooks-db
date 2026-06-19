@@ -245,6 +245,43 @@ final class SqliteIntegrationTest extends TestCase
     }
 
     #[Test]
+    public function savesAndLoadsDeliveryWithAttempts(): void
+    {
+        $storage = new DbWebhookDeliveryStorage(db: $this->db);
+        $delivery = $this->delivery()->withAttempt(
+            at: new DateTimeImmutable('2026-06-12 11:00:00'),
+            error: 'connection refused',
+        );
+
+        $storage->save(delivery: $delivery);
+
+        $loaded = $storage->getById(id: $delivery->getId());
+        $this->assertNotNull($loaded);
+        $this->assertSame(1, $loaded->getAttempts());
+        $this->assertSame('connection refused', $loaded->getLastError());
+        $this->assertNotNull($loaded->getLastAttemptAt());
+    }
+
+    #[Test]
+    public function findPendingRespectsDefaultLimitOfHundred(): void
+    {
+        $storage = new DbWebhookDeliveryStorage(db: $this->db);
+
+        for ($i = 1; $i <= 101; $i++) {
+            $day = 12 + intdiv($i - 1, 24);
+            $hour = ($i - 1) % 24;
+            $storage->save(delivery: $this->delivery(
+                id: sprintf('d%03d', $i),
+                createdAt: sprintf('2026-06-%02d %02d:00:00', $day, $hour),
+            ));
+        }
+
+        $result = $storage->findPending();
+
+        $this->assertCount(100, $result);
+    }
+
+    #[Test]
     public function findPendingThrowsOnInvalidLastAttemptAtFormat(): void
     {
         $this->db->createCommand(sql: "INSERT INTO webhook_deliveries (id, event_id, event_type, endpoint_url, status, created_at, attempts, last_attempt_at) VALUES ('d1', 'event-1', 'type', 'url', 'pending', '2026-06-12 10:00:00', 0, 'not-a-date')")->execute();
