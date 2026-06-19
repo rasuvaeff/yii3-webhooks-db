@@ -24,7 +24,7 @@
     "require": {
         "php": "8.3 - 8.5",
         "psr/clock": "^1.0",
-        "rasuvaeff/yii3-webhooks": "^1.0 || dev-master",
+        "rasuvaeff/yii3-webhooks": "^1.0",
         "yiisoft/db": "^2.0",
         "yiisoft/db-migration": "^2.0"
     },
@@ -41,15 +41,6 @@
         "yiisoft/db-sqlite": "^2.0",
         "yiisoft/test-support": "^3.0"
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "/vendor-local/yii3-webhooks",
-            "options": {
-                "symlink": false
-            }
-        }
-    ],
     "autoload": {
         "psr-4": {
             "Rasuvaeff\\Yii3WebhooksDb\\": "src/"

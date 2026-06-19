@@ -10,6 +10,7 @@ use Rasuvaeff\Yii3WebhooksDb\DbWebhookDeliveryStorage;
 use Yiisoft\Db\Cache\SchemaCache;
 use Yiisoft\Db\Sqlite\Connection;
 use Yiisoft\Db\Sqlite\Driver;
+use Yiisoft\Test\Support\Clock\StaticClock;
 use Yiisoft\Test\Support\SimpleCache\MemorySimpleCache;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -26,7 +27,7 @@ $delivery = WebhookDelivery::create(event: $event, endpoint: $endpoint);
 $deliveries = new DbWebhookDeliveryStorage(db: $db);
 $deliveries->save(delivery: $delivery);
 
-$nonces = new DbNonceStorage(db: $db);
+$nonces = new DbNonceStorage(db: $db, clock: new StaticClock(now: new \DateTimeImmutable()));
 $first = $nonces->add(nonce: 'signature-nonce');
 $second = $nonces->add(nonce: 'signature-nonce');
 

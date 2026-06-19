@@ -8,6 +8,9 @@ use DateTimeImmutable;
 use DateTimeZone;
 use UnexpectedValueException;
 
+/**
+ * @internal
+ */
 final class DateTimeSerializer
 {
     public const string FORMAT = 'Y-m-d H:i:s';
