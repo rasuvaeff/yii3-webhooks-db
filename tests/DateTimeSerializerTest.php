@@ -121,10 +121,10 @@ final class DateTimeSerializerTest extends TestCase
 
         $dt = new DateTimeImmutable('2026-06-12 10:00:00', new DateTimeZone('UTC'));
         DateTimeSerializer::format($dt);
-        $tz1 = $prop->getValue(null);
+        $tz1 = $prop->getValue();
 
         DateTimeSerializer::format($dt);
-        $tz2 = $prop->getValue(null);
+        $tz2 = $prop->getValue();
 
         $this->assertSame($tz1, $tz2);
     }

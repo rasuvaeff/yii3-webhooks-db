@@ -100,7 +100,7 @@ final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
             'status' => $delivery->getStatus()->value,
             'created_at' => DateTimeSerializer::format(dateTime: $delivery->getCreatedAt()),
             'attempts' => $delivery->getAttempts(),
-            'last_attempt_at' => $delivery->getLastAttemptAt() !== null
+            'last_attempt_at' => $delivery->getLastAttemptAt() instanceof \DateTimeImmutable
                 ? DateTimeSerializer::format(dateTime: $delivery->getLastAttemptAt())
                 : null,
             'last_error' => $delivery->getLastError(),
@@ -115,7 +115,7 @@ final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
         return [
             'status' => $status->value,
             'attempts' => $delivery->getAttempts(),
-            'last_attempt_at' => $delivery->getLastAttemptAt() !== null
+            'last_attempt_at' => $delivery->getLastAttemptAt() instanceof \DateTimeImmutable
                 ? DateTimeSerializer::format(dateTime: $delivery->getLastAttemptAt())
                 : null,
             'last_error' => $delivery->getLastError(),

@@ -28,14 +28,14 @@ final class ConfigWiringTest extends TestCase
     {
         $this->assertSame(
             [WebhookDeliveryStorage::class, NonceStorage::class],
-            array_keys($this->loadDb([])),
+            array_keys($this->loadDb(params: [])),
         );
     }
 
     #[Test]
     public function factoriesBuildDbStorages(): void
     {
-        $definitions = $this->loadDb([
+        $definitions = $this->loadDb(params: [
             'rasuvaeff/yii3-webhooks-db' => [
                 'deliveryTable' => 'custom_deliveries',
                 'nonceTable' => 'custom_nonces',
@@ -58,6 +58,8 @@ final class ConfigWiringTest extends TestCase
      */
     private function loadDb(array $params): array
     {
+        $params = array_replace([], $params);
+
         return require dirname(__DIR__, 2) . '/config/di.php';
     }
 

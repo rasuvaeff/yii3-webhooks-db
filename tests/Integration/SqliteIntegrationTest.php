@@ -125,6 +125,24 @@ final class SqliteIntegrationTest extends TestCase
     }
 
     #[Test]
+    public function markDeliveredPersistsLastAttemptAt(): void
+    {
+        $storage = new DbWebhookDeliveryStorage(db: $this->db);
+        $delivery = $this->delivery();
+        $attempted = $delivery->withAttempt(
+            at: new DateTimeImmutable('2026-06-12 11:30:00'),
+        );
+
+        $storage->save(delivery: $delivery);
+        $storage->markDelivered(delivery: $attempted);
+
+        $loaded = $storage->getById(id: $delivery->getId());
+        $this->assertNotNull($loaded);
+        $this->assertNotNull($loaded->getLastAttemptAt());
+        $this->assertSame('2026-06-12 11:30:00', $loaded->getLastAttemptAt()->format('Y-m-d H:i:s'));
+    }
+
+    #[Test]
     public function markFailedUpdatesStatusFromPending(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
