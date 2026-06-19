@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\Yii3WebhooksDb;
 
 use DateTimeImmutable;
+use InvalidArgumentException;
 use Rasuvaeff\Yii3Webhooks\WebhookDelivery;
 use Rasuvaeff\Yii3Webhooks\WebhookDeliveryStatus;
 use Rasuvaeff\Yii3Webhooks\WebhookDeliveryStorage;
@@ -17,13 +18,19 @@ use Yiisoft\Db\Query\Query;
  */
 final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
 {
+    private const string TABLE_PATTERN = '/^[A-Za-z_]\w*(\.[A-Za-z_]\w*)?$/';
+
     /**
      * @param non-empty-string $table
      */
     public function __construct(
         private ConnectionInterface $db,
         private string $table = 'webhook_deliveries',
-    ) {}
+    ) {
+        if (preg_match(self::TABLE_PATTERN, $table) !== 1) {
+            throw new InvalidArgumentException('Invalid table name "' . $table . '"');
+        }
+    }
 
     #[\Override]
     public function save(WebhookDelivery $delivery): void

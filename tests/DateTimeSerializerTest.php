@@ -95,6 +95,15 @@ final class DateTimeSerializerTest extends TestCase
     }
 
     #[Test]
+    public function parseThrowsOnInvalidCalendarDate(): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('Invalid datetime value: 2026-02-31 10:00:00');
+
+        DateTimeSerializer::parse('2026-02-31 10:00:00');
+    }
+
+    #[Test]
     public function parseThrowsOnEmptyString(): void
     {
         $this->expectException(UnexpectedValueException::class);

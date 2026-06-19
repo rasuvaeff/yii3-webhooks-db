@@ -26,7 +26,7 @@ final class DateTimeSerializer
     {
         $dt = DateTimeImmutable::createFromFormat(self::FORMAT, $value, self::utc());
 
-        if ($dt === false) {
+        if (!$dt instanceof DateTimeImmutable || $dt->format(self::FORMAT) !== $value) {
             throw new UnexpectedValueException('Invalid datetime value: ' . $value);
         }
 

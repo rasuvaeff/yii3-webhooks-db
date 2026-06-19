@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\Yii3WebhooksDb;
 
+use InvalidArgumentException;
 use Psr\Clock\ClockInterface;
 use Rasuvaeff\Yii3Webhooks\NonceStorage;
 use Yiisoft\Db\Connection\ConnectionInterface;
@@ -15,6 +16,8 @@ use Yiisoft\Db\Query\Query;
  */
 final readonly class DbNonceStorage implements NonceStorage
 {
+    private const string TABLE_PATTERN = '/^[A-Za-z_]\w*(\.[A-Za-z_]\w*)?$/';
+
     /**
      * @param non-empty-string $table
      */
@@ -22,7 +25,11 @@ final readonly class DbNonceStorage implements NonceStorage
         private ConnectionInterface $db,
         private ClockInterface $clock,
         private string $table = 'webhook_nonces',
-    ) {}
+    ) {
+        if (preg_match(self::TABLE_PATTERN, $table) !== 1) {
+            throw new InvalidArgumentException('Invalid table name "' . $table . '"');
+        }
+    }
 
     #[\Override]
     public function has(string $nonce): bool

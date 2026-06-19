@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\Yii3WebhooksDb\Tests;
 
 use DateTimeImmutable;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -32,5 +33,20 @@ final class DbNonceStorageTest extends TestCase
         );
 
         $this->assertFalse($storage->add(nonce: 'test-nonce'));
+    }
+
+    #[Test]
+    public function rejectsInvalidTableName(): void
+    {
+        $db = $this->createMock(ConnectionInterface::class);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid table name "webhook_nonces; DROP TABLE users"');
+
+        new DbNonceStorage(
+            db: $db,
+            clock: new StaticClock(new DateTimeImmutable('2026-06-12 10:00:00')),
+            table: 'webhook_nonces; DROP TABLE users',
+        );
     }
 }

@@ -11,16 +11,18 @@ composer require rasuvaeff/yii3-webhooks-db
 - Use with `rasuvaeff/yii3-webhooks` core.
 - `DbNonceStorage::add()` is atomic: true means accepted, false means duplicate replay.
 - `DbWebhookDeliveryStorage` persists delivery attempts and never stores endpoint secrets.
+- `DbNonceStorage` requires a `Psr\Clock\ClockInterface` instance.
 - Config-plugin DI binds only `WebhookDeliveryStorage` and `NonceStorage`.
 
 ## API reference
 
 ```php
+use Psr\Clock\ClockInterface;
 use Rasuvaeff\Yii3WebhooksDb\DbNonceStorage;
 use Rasuvaeff\Yii3WebhooksDb\DbWebhookDeliveryStorage;
 
 $deliveryStorage = new DbWebhookDeliveryStorage(db: $db, table: 'webhook_deliveries');
-$nonceStorage = new DbNonceStorage(db: $db, table: 'webhook_nonces');
+$nonceStorage = new DbNonceStorage(db: $db, clock: $clock, table: 'webhook_nonces');
 
 $deliveryStorage->save(delivery: $delivery);
 $pending = $deliveryStorage->findPending(limit: 100);

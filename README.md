@@ -18,6 +18,7 @@ It provides production storage for delivery attempts and atomic replay protectio
 - `rasuvaeff/yii3-webhooks` ^1.0
 - `yiisoft/db` ^2.0
 - `yiisoft/db-migration` ^2.0
+- `psr/clock` ^1.0
 
 ## Installation
 
@@ -30,12 +31,13 @@ composer require rasuvaeff/yii3-webhooks-db
 Run `M260612000000CreateWebhookTables` to create `webhook_deliveries` and `webhook_nonces`.
 
 ```php
+use Psr\Clock\ClockInterface;
 use Rasuvaeff\Yii3Webhooks\WebhookDelivery;
 use Rasuvaeff\Yii3WebhooksDb\DbNonceStorage;
 use Rasuvaeff\Yii3WebhooksDb\DbWebhookDeliveryStorage;
 
 $deliveries = new DbWebhookDeliveryStorage(db: $db);
-$nonces = new DbNonceStorage(db: $db);
+$nonces = new DbNonceStorage(db: $db, clock: $clock);
 
 $delivery = WebhookDelivery::create(event: $event, endpoint: $endpoint);
 $deliveries->save(delivery: $delivery);
