@@ -7,12 +7,12 @@
 [![Psalm Level](https://shepherd.dev/github/rasuvaeff/yii3-webhooks-db/level.svg)](https://shepherd.dev/github/rasuvaeff/yii3-webhooks-db)
 [![License](https://poser.pugx.org/rasuvaeff/yii3-webhooks-db/license)](https://packagist.org/packages/rasuvaeff/yii3-webhooks-db)
 
-Database-backed delivery and nonce storage for `rasuvaeff/yii3-webhooks`.
-It provides production storage for delivery attempts and atomic replay protection.
+База данных для хранения доставок и nonce в `rasuvaeff/yii3-webhooks`.
+Обеспечивает production-хранилище попыток доставки и атомарную защиту от повторного воспроизведения.
 
-> Using an AI coding assistant? [llms.txt](llms.txt) has a compact API reference you can use.
+> Используете AI-ассистент для написания кода? В [llms.txt](llms.txt) есть компактный справочник по API.
 
-## Requirements
+## Требования
 
 - PHP 8.3+
 - `rasuvaeff/yii3-webhooks` ^1.0
@@ -20,15 +20,15 @@ It provides production storage for delivery attempts and atomic replay protectio
 - `yiisoft/db-migration` ^2.0
 - `psr/clock` ^1.0
 
-## Installation
+## Установка
 
 ```bash
 composer require rasuvaeff/yii3-webhooks-db
 ```
 
-## Usage
+## Использование
 
-Run `M260612000000CreateWebhookTables` to create `webhook_deliveries` and `webhook_nonces`.
+Запустите миграцию `M260612000000CreateWebhookTables` для создания таблиц `webhook_deliveries` и `webhook_nonces`.
 
 ```php
 use Psr\Clock\ClockInterface;
@@ -44,39 +44,39 @@ $deliveries->save(delivery: $delivery);
 $accepted = $nonces->add(nonce: $signature->getValue());
 ```
 
-With `yiisoft/config`, this package binds only `WebhookDeliveryStorage` and `NonceStorage`.
+При использовании `yiisoft/config` этот пакет биндит только `WebhookDeliveryStorage` и `NonceStorage`.
 
-## API reference
+## Справочник API
 
 ### DbWebhookDeliveryStorage
 
-| Method | Description |
+| Метод | Описание |
 |---|---|
-| `save(delivery)` | Inserts or updates a delivery row |
-| `findPending(limit)` | Returns pending deliveries ordered by creation time |
-| `markDelivered(delivery)` | Stores the delivery as delivered |
-| `markFailed(delivery)` | Stores the delivery as failed |
-| `getById(id)` | Loads a delivery by ID |
+| `save(delivery)` | Вставляет или обновляет запись доставки |
+| `findPending(limit)` | Возвращает ожидающие доставки, отсортированные по времени создания |
+| `markDelivered(delivery)` | Сохраняет доставку как успешно выполненную |
+| `markFailed(delivery)` | Сохраняет доставку как неуспешную |
+| `getById(id)` | Загружает доставку по ID |
 
 ### DbNonceStorage
 
-| Method | Description |
+| Метод | Описание |
 |---|---|
-| `has(nonce)` | Checks whether a nonce exists |
-| `add(nonce)` | Atomic insert; returns false on duplicate |
-| `deleteOlderThan(threshold)` | Deletes old nonces for retention cleanup |
+| `has(nonce)` | Проверяет, существует ли nonce |
+| `add(nonce)` | Атомарная вставка; возвращает false при дубликате |
+| `deleteOlderThan(threshold)` | Удаляет устаревшие nonce для очистки по сроку хранения |
 
-## Security
+## Безопасность
 
-- `DbNonceStorage::add()` relies on the primary key and catches duplicate-key errors.
-- `DbWebhookDeliveryStorage` persists only `WebhookDelivery` data, never endpoint secrets.
-- Keep nonce rows at least as long as your webhook timestamp tolerance window.
+- `DbNonceStorage::add()` опирается на первичный ключ и перехватывает ошибки дублирования ключа.
+- `DbWebhookDeliveryStorage` сохраняет только данные `WebhookDelivery`, секреты endpoint'ов не хранятся.
+- Держите записи nonce не менее времени, равного допустимому окну временно́й метки webhook'а.
 
-## Examples
+## Примеры
 
-See [examples/](examples/) for a runnable SQLite example.
+Смотрите [examples/](examples/) для запускаемого примера на SQLite.
 
-## Development
+## Разработка
 
 ```bash
 make install
@@ -88,6 +88,6 @@ make mutation
 make release-check
 ```
 
-## License
+## Лицензия
 
-BSD-3-Clause. See [LICENSE.md](LICENSE.md).
+BSD-3-Clause. Смотрите [LICENSE.md](LICENSE.md).

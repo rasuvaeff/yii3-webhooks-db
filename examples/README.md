@@ -1,10 +1,10 @@
-# Examples
+# Примеры
 
-| Script | Shows | Needs server? |
+| Скрипт | Демонстрирует | Нужен сервер? |
 |---|---|---|
-| `sqlite.php` | Delivery persistence and atomic nonce storage with in-memory SQLite | No |
+| `sqlite.php` | Сохранение доставок и атомарное хранение nonce с in-memory SQLite | Нет |
 
-Run:
+Запуск:
 
 ```bash
 php examples/sqlite.php
