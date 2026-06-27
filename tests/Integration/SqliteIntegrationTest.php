@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace Rasuvaeff\Yii3WebhooksDb\Tests\Integration;
 
 use DateTimeImmutable;
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
 use Rasuvaeff\Yii3Webhooks\WebhookDelivery;
 use Rasuvaeff\Yii3Webhooks\WebhookDeliveryStatus;
@@ -15,6 +12,11 @@ use Rasuvaeff\Yii3Webhooks\WebhookEndpoint;
 use Rasuvaeff\Yii3Webhooks\WebhookEvent;
 use Rasuvaeff\Yii3WebhooksDb\DbNonceStorage;
 use Rasuvaeff\Yii3WebhooksDb\DbWebhookDeliveryStorage;
+use Testo\Assert;
+use Testo\Codecov\Covers;
+use Testo\Lifecycle\AfterTest;
+use Testo\Lifecycle\BeforeTest;
+use Testo\Test;
 use UnexpectedValueException;
 use Yiisoft\Db\Cache\SchemaCache;
 use Yiisoft\Db\Connection\ConnectionInterface;
@@ -23,14 +25,15 @@ use Yiisoft\Db\Sqlite\Driver as SqliteDriver;
 use Yiisoft\Test\Support\Clock\StaticClock;
 use Yiisoft\Test\Support\SimpleCache\MemorySimpleCache;
 
-#[CoversClass(DbWebhookDeliveryStorage::class)]
-#[CoversClass(DbNonceStorage::class)]
-final class SqliteIntegrationTest extends TestCase
+#[Test]
+#[Covers(DbWebhookDeliveryStorage::class)]
+#[Covers(DbNonceStorage::class)]
+final class SqliteIntegrationTest
 {
     private ConnectionInterface $db;
 
-    #[\Override]
-    protected function setUp(): void
+    #[BeforeTest]
+    public function setUp(): void
     {
         $driver = new SqliteDriver(dsn: 'sqlite::memory:');
         $schemaCache = new SchemaCache(psrCache: new MemorySimpleCache());
@@ -39,23 +42,21 @@ final class SqliteIntegrationTest extends TestCase
         $this->createTables();
     }
 
-    #[\Override]
-    protected function tearDown(): void
+    #[AfterTest]
+    public function tearDown(): void
     {
         $this->db->close();
     }
 
-    #[Test]
     public function nonceAddIsAtomicAndRejectsDuplicate(): void
     {
         $storage = new DbNonceStorage(db: $this->db, clock: $this->fixedClock());
 
-        $this->assertTrue($storage->add(nonce: 'nonce-1'));
-        $this->assertFalse($storage->add(nonce: 'nonce-1'));
-        $this->assertTrue($storage->has(nonce: 'nonce-1'));
+        Assert::true($storage->add(nonce: 'nonce-1'));
+        Assert::false($storage->add(nonce: 'nonce-1'));
+        Assert::true($storage->has(nonce: 'nonce-1'));
     }
 
-    #[Test]
     public function deleteOlderThanRemovesOldNonces(): void
     {
         $this->db->createCommand()->insert(
@@ -70,12 +71,11 @@ final class SqliteIntegrationTest extends TestCase
         $storage = new DbNonceStorage(db: $this->db, clock: $this->fixedClock());
         $deleted = $storage->deleteOlderThan(threshold: new DateTimeImmutable('2026-06-10 00:00:00'));
 
-        $this->assertSame(1, $deleted);
-        $this->assertFalse($storage->has(nonce: 'old'));
-        $this->assertTrue($storage->has(nonce: 'new'));
+        Assert::same($deleted, 1);
+        Assert::false($storage->has(nonce: 'old'));
+        Assert::true($storage->has(nonce: 'new'));
     }
 
-    #[Test]
     public function savesAndLoadsDelivery(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -84,17 +84,16 @@ final class SqliteIntegrationTest extends TestCase
         $storage->save(delivery: $delivery);
 
         $loaded = $storage->getById(id: $delivery->getId());
-        $this->assertNotNull($loaded);
-        $this->assertSame($delivery->getId(), $loaded->getId());
-        $this->assertSame('order.created', $loaded->getEventType());
-        $this->assertSame('https://partner.example/webhook', $loaded->getEndpointUrl());
-        $this->assertSame(WebhookDeliveryStatus::Pending, $loaded->getStatus());
-        $this->assertSame(0, $loaded->getAttempts());
-        $this->assertNull($loaded->getLastAttemptAt());
-        $this->assertNull($loaded->getLastError());
+        Assert::notNull($loaded);
+        Assert::same($loaded->getId(), $delivery->getId());
+        Assert::same($loaded->getEventType(), 'order.created');
+        Assert::same($loaded->getEndpointUrl(), 'https://partner.example/webhook');
+        Assert::same($loaded->getStatus(), WebhookDeliveryStatus::Pending);
+        Assert::same($loaded->getAttempts(), 0);
+        Assert::null($loaded->getLastAttemptAt());
+        Assert::null($loaded->getLastError());
     }
 
-    #[Test]
     public function findPendingReturnsOnlyPendingDeliveries(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -106,11 +105,10 @@ final class SqliteIntegrationTest extends TestCase
 
         $result = $storage->findPending(limit: 10);
 
-        $this->assertCount(1, $result);
-        $this->assertSame('pending-delivery', $result[0]->getId());
+        Assert::count($result, 1);
+        Assert::same($result[0]->getId(), 'pending-delivery');
     }
 
-    #[Test]
     public function markDeliveredUpdatesStatusFromPending(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -120,11 +118,10 @@ final class SqliteIntegrationTest extends TestCase
         $storage->markDelivered(delivery: $delivery);
 
         $loaded = $storage->getById(id: $delivery->getId());
-        $this->assertNotNull($loaded);
-        $this->assertSame(WebhookDeliveryStatus::Delivered, $loaded->getStatus());
+        Assert::notNull($loaded);
+        Assert::same($loaded->getStatus(), WebhookDeliveryStatus::Delivered);
     }
 
-    #[Test]
     public function markDeliveredPersistsLastAttemptAt(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -137,12 +134,11 @@ final class SqliteIntegrationTest extends TestCase
         $storage->markDelivered(delivery: $attempted);
 
         $loaded = $storage->getById(id: $delivery->getId());
-        $this->assertNotNull($loaded);
-        $this->assertNotNull($loaded->getLastAttemptAt());
-        $this->assertSame('2026-06-12 11:30:00', $loaded->getLastAttemptAt()->format('Y-m-d H:i:s'));
+        Assert::notNull($loaded);
+        Assert::notNull($loaded->getLastAttemptAt());
+        Assert::same($loaded->getLastAttemptAt()->format('Y-m-d H:i:s'), '2026-06-12 11:30:00');
     }
 
-    #[Test]
     public function markFailedUpdatesStatusFromPending(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -152,11 +148,10 @@ final class SqliteIntegrationTest extends TestCase
         $storage->markFailed(delivery: $delivery);
 
         $loaded = $storage->getById(id: $delivery->getId());
-        $this->assertNotNull($loaded);
-        $this->assertSame(WebhookDeliveryStatus::Failed, $loaded->getStatus());
+        Assert::notNull($loaded);
+        Assert::same($loaded->getStatus(), WebhookDeliveryStatus::Failed);
     }
 
-    #[Test]
     public function markDeliveredIgnoresAlreadyProcessedDelivery(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -166,11 +161,10 @@ final class SqliteIntegrationTest extends TestCase
         $storage->markDelivered(delivery: $delivery);
 
         $loaded = $storage->getById(id: $delivery->getId());
-        $this->assertNotNull($loaded);
-        $this->assertSame(WebhookDeliveryStatus::Failed, $loaded->getStatus());
+        Assert::notNull($loaded);
+        Assert::same($loaded->getStatus(), WebhookDeliveryStatus::Failed);
     }
 
-    #[Test]
     public function markFailedIgnoresAlreadyProcessedDelivery(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -180,11 +174,10 @@ final class SqliteIntegrationTest extends TestCase
         $storage->markFailed(delivery: $delivery);
 
         $loaded = $storage->getById(id: $delivery->getId());
-        $this->assertNotNull($loaded);
-        $this->assertSame(WebhookDeliveryStatus::Delivered, $loaded->getStatus());
+        Assert::notNull($loaded);
+        Assert::same($loaded->getStatus(), WebhookDeliveryStatus::Delivered);
     }
 
-    #[Test]
     public function markDeliveredOnlyAffectsSpecifiedDelivery(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -193,11 +186,10 @@ final class SqliteIntegrationTest extends TestCase
 
         $storage->markDelivered(delivery: $this->delivery(id: 'd1'));
 
-        $this->assertSame(WebhookDeliveryStatus::Delivered, $storage->getById(id: 'd1')?->getStatus());
-        $this->assertSame(WebhookDeliveryStatus::Pending, $storage->getById(id: 'd2')?->getStatus());
+        Assert::same($storage->getById(id: 'd1')?->getStatus(), WebhookDeliveryStatus::Delivered);
+        Assert::same($storage->getById(id: 'd2')?->getStatus(), WebhookDeliveryStatus::Pending);
     }
 
-    #[Test]
     public function markFailedOnlyAffectsSpecifiedDelivery(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -206,11 +198,10 @@ final class SqliteIntegrationTest extends TestCase
 
         $storage->markFailed(delivery: $this->delivery(id: 'd1'));
 
-        $this->assertSame(WebhookDeliveryStatus::Failed, $storage->getById(id: 'd1')?->getStatus());
-        $this->assertSame(WebhookDeliveryStatus::Pending, $storage->getById(id: 'd2')?->getStatus());
+        Assert::same($storage->getById(id: 'd1')?->getStatus(), WebhookDeliveryStatus::Failed);
+        Assert::same($storage->getById(id: 'd2')?->getStatus(), WebhookDeliveryStatus::Pending);
     }
 
-    #[Test]
     public function findPendingOrdersByCreatedAtAscending(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -220,13 +211,12 @@ final class SqliteIntegrationTest extends TestCase
 
         $result = $storage->findPending(limit: 10);
 
-        $this->assertCount(3, $result);
-        $this->assertSame('earlier', $result[0]->getId());
-        $this->assertSame('middle', $result[1]->getId());
-        $this->assertSame('later', $result[2]->getId());
+        Assert::count($result, 3);
+        Assert::same($result[0]->getId(), 'earlier');
+        Assert::same($result[1]->getId(), 'middle');
+        Assert::same($result[2]->getId(), 'later');
     }
 
-    #[Test]
     public function findPendingRespectsLimit(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -236,12 +226,11 @@ final class SqliteIntegrationTest extends TestCase
 
         $result = $storage->findPending(limit: 2);
 
-        $this->assertCount(2, $result);
-        $this->assertSame('d1', $result[0]->getId());
-        $this->assertSame('d2', $result[1]->getId());
+        Assert::count($result, 2);
+        Assert::same($result[0]->getId(), 'd1');
+        Assert::same($result[1]->getId(), 'd2');
     }
 
-    #[Test]
     public function getByIdReturnsCorrectDeliveryAmongMultiple(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -250,19 +239,17 @@ final class SqliteIntegrationTest extends TestCase
 
         $loaded = $storage->getById(id: 'second');
 
-        $this->assertNotNull($loaded);
-        $this->assertSame('second', $loaded->getId());
+        Assert::notNull($loaded);
+        Assert::same($loaded->getId(), 'second');
     }
 
-    #[Test]
     public function getByIdReturnsNullForMissingId(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
 
-        $this->assertNull($storage->getById(id: 'nonexistent'));
+        Assert::null($storage->getById(id: 'nonexistent'));
     }
 
-    #[Test]
     public function savesAndLoadsDeliveryWithAttempts(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -274,13 +261,12 @@ final class SqliteIntegrationTest extends TestCase
         $storage->save(delivery: $delivery);
 
         $loaded = $storage->getById(id: $delivery->getId());
-        $this->assertNotNull($loaded);
-        $this->assertSame(1, $loaded->getAttempts());
-        $this->assertSame('connection refused', $loaded->getLastError());
-        $this->assertNotNull($loaded->getLastAttemptAt());
+        Assert::notNull($loaded);
+        Assert::same($loaded->getAttempts(), 1);
+        Assert::same($loaded->getLastError(), 'connection refused');
+        Assert::notNull($loaded->getLastAttemptAt());
     }
 
-    #[Test]
     public function findPendingRespectsDefaultLimitOfHundred(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
@@ -296,10 +282,9 @@ final class SqliteIntegrationTest extends TestCase
 
         $result = $storage->findPending();
 
-        $this->assertCount(100, $result);
+        Assert::count($result, 100);
     }
 
-    #[Test]
     public function findPendingThrowsWhenRequiredFieldIsNull(): void
     {
         $this->db->createCommand(sql: 'CREATE TABLE wd_null_field (id TEXT PRIMARY KEY, event_id TEXT, event_type TEXT NOT NULL, endpoint_url TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_attempt_at TEXT, last_error TEXT)')->execute();
@@ -307,37 +292,40 @@ final class SqliteIntegrationTest extends TestCase
 
         $storage = new DbWebhookDeliveryStorage(db: $this->db, table: 'wd_null_field');
 
-        $this->expectException(\UnexpectedValueException::class);
-        $this->expectExceptionMessage('Invalid webhook delivery row field "event_id"');
-
-        $storage->findPending(limit: 10);
+        try {
+            $storage->findPending(limit: 10);
+            Assert::fail('Expected UnexpectedValueException');
+        } catch (UnexpectedValueException $e) {
+            Assert::string($e->getMessage())->contains('Invalid webhook delivery row field "event_id"');
+        }
     }
 
-    #[Test]
     public function nullableStringThrowsOnNonStringValue(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
         $method = new \ReflectionMethod(DbWebhookDeliveryStorage::class, 'nullableString');
 
-        $this->expectException(\UnexpectedValueException::class);
-        $this->expectExceptionMessage('Invalid nullable string field');
-
-        $method->invoke($storage, 42);
+        try {
+            $method->invoke($storage, 42);
+            Assert::fail('Expected UnexpectedValueException');
+        } catch (UnexpectedValueException $e) {
+            Assert::string($e->getMessage())->contains('Invalid nullable string field');
+        }
     }
 
-    #[Test]
     public function nullableDateTimeThrowsOnNonStringValue(): void
     {
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
         $method = new \ReflectionMethod(DbWebhookDeliveryStorage::class, 'nullableDateTime');
 
-        $this->expectException(\UnexpectedValueException::class);
-        $this->expectExceptionMessage('Invalid nullable datetime field');
-
-        $method->invoke($storage, 42);
+        try {
+            $method->invoke($storage, 42);
+            Assert::fail('Expected UnexpectedValueException');
+        } catch (UnexpectedValueException $e) {
+            Assert::string($e->getMessage())->contains('Invalid nullable datetime field');
+        }
     }
 
-    #[Test]
     public function getAttemptsDefaultsToZeroWhenNullInDatabase(): void
     {
         $this->db->createCommand(sql: 'CREATE TABLE wd_null_attempts (id TEXT PRIMARY KEY, event_id TEXT NOT NULL, event_type TEXT NOT NULL, endpoint_url TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, attempts INTEGER, last_attempt_at TEXT, last_error TEXT)')->execute();
@@ -346,34 +334,36 @@ final class SqliteIntegrationTest extends TestCase
         $storage = new DbWebhookDeliveryStorage(db: $this->db, table: 'wd_null_attempts');
 
         $loaded = $storage->getById(id: 'd1');
-        $this->assertNotNull($loaded);
-        $this->assertSame(0, $loaded->getAttempts());
+        Assert::notNull($loaded);
+        Assert::same($loaded->getAttempts(), 0);
     }
 
-    #[Test]
     public function findPendingThrowsOnInvalidLastAttemptAtFormat(): void
     {
         $this->db->createCommand(sql: "INSERT INTO webhook_deliveries (id, event_id, event_type, endpoint_url, status, created_at, attempts, last_attempt_at) VALUES ('d1', 'event-1', 'type', 'url', 'pending', '2026-06-12 10:00:00', 0, 'not-a-date')")->execute();
 
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
 
-        $this->expectException(UnexpectedValueException::class);
-        $this->expectExceptionMessage('Invalid datetime value: not-a-date');
-
-        $storage->findPending(limit: 10);
+        try {
+            $storage->findPending(limit: 10);
+            Assert::fail('Expected UnexpectedValueException');
+        } catch (UnexpectedValueException $e) {
+            Assert::string($e->getMessage())->contains('Invalid datetime value: not-a-date');
+        }
     }
 
-    #[Test]
     public function findPendingThrowsOnInvalidCreatedAtFormat(): void
     {
         $this->db->createCommand(sql: "INSERT INTO webhook_deliveries (id, event_id, event_type, endpoint_url, status, created_at, attempts) VALUES ('d1', 'event-1', 'type', 'url', 'pending', 'not-a-date', 0)")->execute();
 
         $storage = new DbWebhookDeliveryStorage(db: $this->db);
 
-        $this->expectException(UnexpectedValueException::class);
-        $this->expectExceptionMessage('Invalid datetime value: not-a-date');
-
-        $storage->findPending(limit: 10);
+        try {
+            $storage->findPending(limit: 10);
+            Assert::fail('Expected UnexpectedValueException');
+        } catch (UnexpectedValueException $e) {
+            Assert::string($e->getMessage())->contains('Invalid datetime value: not-a-date');
+        }
     }
 
     private function createTables(): void

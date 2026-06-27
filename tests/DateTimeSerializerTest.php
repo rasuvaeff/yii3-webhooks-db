@@ -6,50 +6,47 @@ namespace Rasuvaeff\Yii3WebhooksDb\Tests;
 
 use DateTimeImmutable;
 use DateTimeZone;
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\TestCase;
 use Rasuvaeff\Yii3WebhooksDb\DateTimeSerializer;
+use Testo\Assert;
+use Testo\Codecov\Covers;
+use Testo\Data\DataProvider;
+use Testo\Expect;
+use Testo\Test;
 use UnexpectedValueException;
 
-#[CoversClass(DateTimeSerializer::class)]
-final class DateTimeSerializerTest extends TestCase
+#[Test]
+#[Covers(DateTimeSerializer::class)]
+final class DateTimeSerializerTest
 {
-    #[Test]
     public function formatsToUtcString(): void
     {
         $dt = new DateTimeImmutable('2026-06-12 15:30:45', new DateTimeZone('UTC'));
 
-        $this->assertSame('2026-06-12 15:30:45', DateTimeSerializer::format($dt));
+        Assert::same(DateTimeSerializer::format($dt), '2026-06-12 15:30:45');
     }
 
-    #[Test]
     public function formatsConvertingNonUtcTimezone(): void
     {
         $dt = new DateTimeImmutable('2026-06-12 18:30:45', new DateTimeZone('Europe/Moscow'));
 
-        $this->assertSame('2026-06-12 15:30:45', DateTimeSerializer::format($dt));
+        Assert::same(DateTimeSerializer::format($dt), '2026-06-12 15:30:45');
     }
 
-    #[Test]
     public function formatsWithNegativeOffsetTimezone(): void
     {
         $dt = new DateTimeImmutable('2026-06-12 10:30:45', new DateTimeZone('-05:00'));
 
-        $this->assertSame('2026-06-12 15:30:45', DateTimeSerializer::format($dt));
+        Assert::same(DateTimeSerializer::format($dt), '2026-06-12 15:30:45');
     }
 
-    #[Test]
     public function parsesValidString(): void
     {
         $dt = DateTimeSerializer::parse('2026-06-12 15:30:45');
 
-        $this->assertSame('2026-06-12 15:30:45', $dt->format('Y-m-d H:i:s'));
-        $this->assertSame('UTC', $dt->getTimezone()->getName());
+        Assert::same($dt->format('Y-m-d H:i:s'), '2026-06-12 15:30:45');
+        Assert::same($dt->getTimezone()->getName(), 'UTC');
     }
 
-    #[Test]
     public function roundTripPreservesValue(): void
     {
         $original = new DateTimeImmutable('2026-01-31 23:59:59', new DateTimeZone('UTC'));
@@ -57,10 +54,9 @@ final class DateTimeSerializerTest extends TestCase
         $formatted = DateTimeSerializer::format($original);
         $parsed = DateTimeSerializer::parse($formatted);
 
-        $this->assertSame($original->getTimestamp(), $parsed->getTimestamp());
+        Assert::same($parsed->getTimestamp(), $original->getTimestamp());
     }
 
-    #[Test]
     public function roundTripWithNonUtcTimezone(): void
     {
         $local = new DateTimeImmutable('2026-03-15 12:00:00', new DateTimeZone('Asia/Tokyo'));
@@ -68,61 +64,60 @@ final class DateTimeSerializerTest extends TestCase
         $formatted = DateTimeSerializer::format($local);
         $parsed = DateTimeSerializer::parse($formatted);
 
-        $this->assertSame($local->getTimestamp(), $parsed->getTimestamp());
+        Assert::same($parsed->getTimestamp(), $local->getTimestamp());
     }
 
-    #[Test]
     public function formatConstantIsExpectedValue(): void
     {
-        $this->assertSame('Y-m-d H:i:s', DateTimeSerializer::FORMAT);
+        Assert::same(DateTimeSerializer::FORMAT, 'Y-m-d H:i:s');
     }
 
-    #[Test]
     public function parseThrowsOnInvalidFormat(): void
     {
-        $this->expectException(UnexpectedValueException::class);
-        $this->expectExceptionMessage('Invalid datetime value: not-a-date');
-
-        DateTimeSerializer::parse('not-a-date');
+        try {
+            DateTimeSerializer::parse('not-a-date');
+            Assert::fail('Expected UnexpectedValueException');
+        } catch (UnexpectedValueException $e) {
+            Assert::string($e->getMessage())->contains('Invalid datetime value: not-a-date');
+        }
     }
 
-    #[Test]
     public function parseThrowsOnIso8601Format(): void
     {
-        $this->expectException(UnexpectedValueException::class);
+        Expect::exception(UnexpectedValueException::class);
 
         DateTimeSerializer::parse('2026-06-12T15:30:45+00:00');
     }
 
-    #[Test]
     public function parseThrowsOnInvalidCalendarDate(): void
     {
-        $this->expectException(UnexpectedValueException::class);
-        $this->expectExceptionMessage('Invalid datetime value: 2026-02-31 10:00:00');
-
-        DateTimeSerializer::parse('2026-02-31 10:00:00');
+        try {
+            DateTimeSerializer::parse('2026-02-31 10:00:00');
+            Assert::fail('Expected UnexpectedValueException');
+        } catch (UnexpectedValueException $e) {
+            Assert::string($e->getMessage())->contains('Invalid datetime value: 2026-02-31 10:00:00');
+        }
     }
 
-    #[Test]
     public function parseThrowsOnEmptyString(): void
     {
-        $this->expectException(UnexpectedValueException::class);
-        $this->expectExceptionMessage('Invalid datetime value: ');
-
-        DateTimeSerializer::parse('');
+        try {
+            DateTimeSerializer::parse('');
+            Assert::fail('Expected UnexpectedValueException');
+        } catch (UnexpectedValueException $e) {
+            Assert::string($e->getMessage())->contains('Invalid datetime value: ');
+        }
     }
 
     #[DataProvider('boundaryValueProvider')]
-    #[Test]
     public function roundTripBoundaryValues(string $value): void
     {
         $parsed = DateTimeSerializer::parse($value);
         $formatted = DateTimeSerializer::format($parsed);
 
-        $this->assertSame($value, $formatted);
+        Assert::same($formatted, $value);
     }
 
-    #[Test]
     public function utcTimezoneIsCachedAcrossCalls(): void
     {
         $prop = new \ReflectionProperty(DateTimeSerializer::class, 'utc');
@@ -135,12 +130,9 @@ final class DateTimeSerializerTest extends TestCase
         DateTimeSerializer::format($dt);
         $tz2 = $prop->getValue();
 
-        $this->assertSame($tz1, $tz2);
+        Assert::same($tz2, $tz1);
     }
 
-    /**
-     * @return iterable<string, array{0: string}>
-     */
     public static function boundaryValueProvider(): iterable
     {
         yield 'year start' => ['2026-01-01 00:00:00'];
