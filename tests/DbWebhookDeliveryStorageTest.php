@@ -5,26 +5,27 @@ declare(strict_types=1);
 namespace Rasuvaeff\Yii3WebhooksDb\Tests;
 
 use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\TestCase;
 use Rasuvaeff\Yii3WebhooksDb\DbWebhookDeliveryStorage;
-use Yiisoft\Db\Connection\ConnectionInterface;
+use Testo\Assert;
+use Testo\Codecov\Covers;
+use Testo\Test;
 
-#[CoversClass(DbWebhookDeliveryStorage::class)]
-final class DbWebhookDeliveryStorageTest extends TestCase
+#[Test]
+#[Covers(DbWebhookDeliveryStorage::class)]
+final class DbWebhookDeliveryStorageTest
 {
-    #[Test]
     public function rejectsInvalidTableName(): void
     {
-        $db = $this->createMock(ConnectionInterface::class);
+        $db = new FakeConnection(command: new FakeCommand());
 
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Invalid table name "webhook_deliveries; DROP TABLE users"');
-
-        new DbWebhookDeliveryStorage(
-            db: $db,
-            table: 'webhook_deliveries; DROP TABLE users',
-        );
+        try {
+            new DbWebhookDeliveryStorage(
+                db: $db,
+                table: 'webhook_deliveries; DROP TABLE users',
+            );
+            Assert::fail('Expected InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('Invalid table name "webhook_deliveries; DROP TABLE users"');
+        }
     }
 }

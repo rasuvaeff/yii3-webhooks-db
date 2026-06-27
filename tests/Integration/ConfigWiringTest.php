@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Rasuvaeff\Yii3WebhooksDb\Tests\Integration;
 
 use DateTimeImmutable;
-use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
 use Rasuvaeff\Yii3Webhooks\NonceStorage;
 use Rasuvaeff\Yii3Webhooks\WebhookDeliveryStorage;
 use Rasuvaeff\Yii3WebhooksDb\DbNonceStorage;
 use Rasuvaeff\Yii3WebhooksDb\DbWebhookDeliveryStorage;
+use Testo\Assert;
+use Testo\Codecov\CoversNothing;
+use Testo\Test;
 use Yiisoft\Db\Cache\SchemaCache;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Db\Sqlite\Connection as SqliteConnection;
@@ -20,19 +20,18 @@ use Yiisoft\Db\Sqlite\Driver as SqliteDriver;
 use Yiisoft\Test\Support\Clock\StaticClock;
 use Yiisoft\Test\Support\SimpleCache\MemorySimpleCache;
 
+#[Test]
 #[CoversNothing]
-final class ConfigWiringTest extends TestCase
+final class ConfigWiringTest
 {
-    #[Test]
     public function bindsOnlySwappableStorageKeys(): void
     {
-        $this->assertSame(
-            [WebhookDeliveryStorage::class, NonceStorage::class],
+        Assert::same(
             array_keys($this->loadDb(params: [])),
+            [WebhookDeliveryStorage::class, NonceStorage::class],
         );
     }
 
-    #[Test]
     public function factoriesBuildDbStorages(): void
     {
         $definitions = $this->loadDb(params: [
@@ -44,11 +43,11 @@ final class ConfigWiringTest extends TestCase
 
         $deliveryFactory = $definitions[WebhookDeliveryStorage::class];
         $nonceFactory = $definitions[NonceStorage::class];
-        $this->assertIsCallable($deliveryFactory);
-        $this->assertIsCallable($nonceFactory);
+        Assert::true(is_callable($deliveryFactory));
+        Assert::true(is_callable($nonceFactory));
 
-        $this->assertInstanceOf(DbWebhookDeliveryStorage::class, $deliveryFactory($this->sqlite()));
-        $this->assertInstanceOf(DbNonceStorage::class, $nonceFactory($this->sqlite(), $this->fixedClock()));
+        Assert::instanceOf($deliveryFactory($this->sqlite()), DbWebhookDeliveryStorage::class);
+        Assert::instanceOf($nonceFactory($this->sqlite(), $this->fixedClock()), DbNonceStorage::class);
     }
 
     /**
