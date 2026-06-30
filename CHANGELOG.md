@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2 — 2026-06-30
+
+- Add `/benchmarks` and `/Makefile` to `.gitattributes` export-ignore.
+
 ## 1.0.1 — 2026-06-27
 
 - Migrate test suite from PHPUnit to Testo. Internal change, no public API impact.
