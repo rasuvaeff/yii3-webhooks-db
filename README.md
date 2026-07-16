@@ -6,6 +6,7 @@
 [![Static analysis](https://github.com/rasuvaeff/yii3-webhooks-db/actions/workflows/static-analysis.yml/badge.svg)](https://github.com/rasuvaeff/yii3-webhooks-db/actions)
 [![Psalm Level](https://shepherd.dev/github/rasuvaeff/yii3-webhooks-db/level.svg)](https://shepherd.dev/github/rasuvaeff/yii3-webhooks-db)
 [![License](https://poser.pugx.org/rasuvaeff/yii3-webhooks-db/license)](https://packagist.org/packages/rasuvaeff/yii3-webhooks-db)
+[Русская версия](README.ru.md)
 
 База данных для хранения доставок и nonce в `rasuvaeff/yii3-webhooks`.
 Обеспечивает production-хранилище попыток доставки и атомарную защиту от повторного воспроизведения.
