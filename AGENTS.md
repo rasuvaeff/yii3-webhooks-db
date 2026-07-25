@@ -43,6 +43,23 @@ make release-check
 
 ## Invariants & gotchas
 
+- **The table names are VOs, not strings, because `Injector` cannot resolve a
+  scalar.** `yiisoft/db-migration` builds migrations via `Injector::make()`,
+  which resolves arguments by name or by type and never reads a container
+  definition keyed by the migration's own class. Never reintroduce scalar
+  `string $deliveryTable` / `string $nonceTable` on a migration.
+- **One source of truth per name.** `config/di.php` builds
+  `WebhookDeliveryTableName` and `WebhookNonceTableName` from params (a shared
+  `table_prefix` plus each table's own key) and passes them to the migration and
+  to both storages; the identifier regex lives only in the VOs (it used to be
+  duplicated in both storages).
+- **Index names derive from their table's name.** In PostgreSQL index names are
+  unique per schema, not per table.
+- Migrations live in `src/Migration/` and are therefore covered by cs, psalm and
+  infection. `MigrationTableNameTest` asserts both column sets and each index's
+  columns.
+- `composer test` runs only the Unit suite; `composer mutation` runs every
+  suite.
 - Backend config binds only `WebhookDeliveryStorage` and `NonceStorage`.
 - Never bind webhooks facade/dispatcher keys in this package.
 - Nonce table must keep `nonce` as primary key or unique key.

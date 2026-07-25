@@ -29,8 +29,6 @@ composer require rasuvaeff/yii3-webhooks-db
 
 ## Использование
 
-Запустите миграцию `M260612000000CreateWebhookTables` для создания таблиц `webhook_deliveries` и `webhook_nonces`.
-
 ```php
 use Psr\Clock\ClockInterface;
 use Rasuvaeff\Yii3Webhooks\WebhookDelivery;
@@ -46,6 +44,51 @@ $accepted = $nonces->add(nonce: $signature->getValue());
 ```
 
 При использовании `yiisoft/config` этот пакет биндит только `WebhookDeliveryStorage` и `NonceStorage`.
+
+## Миграция
+
+Регистрируйте поставляемую миграцию
+(`Rasuvaeff\Yii3WebhooksDb\Migration\M260612000000CreateWebhookTables`)
+**по namespace** — без путей в `vendor/`:
+
+```php
+// config/common/di/migration.php
+use Yiisoft\Db\Migration\Service\MigrationService;
+
+return [
+    MigrationService::class => [
+        'setSourceNamespaces()' => [['App\\Migration', 'Rasuvaeff\\Yii3WebhooksDb\\Migration']],
+    ],
+];
+```
+
+```bash
+./yii migrate:up
+```
+
+Имена таблиц задаются в params — те же значения получают и миграция, и оба
+хранилища (через `WebhookDeliveryTableName` / `WebhookNonceTableName`):
+
+```php
+// config/common/params.php
+'rasuvaeff/yii3-webhooks-db' => [
+    'deliveryTable' => 'my_webhook_deliveries',
+    'nonceTable' => 'my_webhook_nonces',
+    'table_prefix' => '',   // добавляется к обоим; например 'rsv_' → rsv_my_webhook_deliveries
+],
+```
+
+Имена индексов следуют за именами таблиц, поэтому две инсталляции могут делить
+одну схему PostgreSQL — там имена индексов уникальны в пределах схемы, а не
+таблицы.
+
+> **Не настраивайте миграцию через DI-контейнер.**
+> `M...::class => ['__construct()' => [...]]` не работает: миграцию создаёт
+> `Injector::make()`, который резолвит аргументы по типу и никогда не читает
+> определение контейнера по имени класса самой миграции. Хуже того, добавление
+> такого определения роняет контейнер на этапе сборки в **каждом** запросе,
+> потому что класс не автозагружается, пока его не подключит раннер миграций.
+> Этот рецепт был описан в 1.x и никогда не работал.
 
 ## Справочник API
 
