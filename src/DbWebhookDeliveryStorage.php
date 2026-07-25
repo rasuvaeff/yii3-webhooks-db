@@ -18,18 +18,20 @@ use Yiisoft\Db\Query\Query;
  */
 final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
 {
-    private const string TABLE_PATTERN = '/^[A-Za-z_]\w*(\.[A-Za-z_]\w*)?$/';
+    private string $table;
 
     /**
      * @param non-empty-string $table
+     *
+     * @throws InvalidArgumentException when the name is not a valid identifier
      */
     public function __construct(
         private ConnectionInterface $db,
-        private string $table = 'webhook_deliveries',
+        string $table = 'webhook_deliveries',
     ) {
-        if (preg_match(self::TABLE_PATTERN, $table) !== 1) {
-            throw new InvalidArgumentException('Invalid table name "' . $table . '"');
-        }
+        // validation lives in the value object, so the storage and the bundled
+        // migration cannot disagree about what a valid table name is
+        $this->table = (new WebhookDeliveryTableName($table))->value;
     }
 
     #[\Override]
