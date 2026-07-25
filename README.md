@@ -8,12 +8,13 @@
 [![License](https://poser.pugx.org/rasuvaeff/yii3-webhooks-db/license)](https://packagist.org/packages/rasuvaeff/yii3-webhooks-db)
 [Русская версия](README.ru.md)
 
-База данных для хранения доставок и nonce в `rasuvaeff/yii3-webhooks`.
-Обеспечивает production-хранилище попыток доставки и атомарную защиту от повторного воспроизведения.
+Database storage for `rasuvaeff/yii3-webhooks` deliveries and nonces: a
+production-grade record of delivery attempts and atomic replay protection.
 
-> Используете AI-ассистент для написания кода? В [llms.txt](llms.txt) есть компактный справочник по API.
+> **Using an AI coding assistant?** [llms.txt](llms.txt) contains a compact API
+> reference you can share with the model.
 
-## Требования
+## Requirements
 
 - PHP 8.3+
 - `rasuvaeff/yii3-webhooks` ^1.0
@@ -21,13 +22,13 @@
 - `yiisoft/db-migration` ^2.0
 - `psr/clock` ^1.0
 
-## Установка
+## Installation
 
 ```bash
 composer require rasuvaeff/yii3-webhooks-db
 ```
 
-## Использование
+## Usage
 
 ```php
 use Psr\Clock\ClockInterface;
@@ -43,13 +44,14 @@ $deliveries->save(delivery: $delivery);
 $accepted = $nonces->add(nonce: $signature->getValue());
 ```
 
-При использовании `yiisoft/config` этот пакет биндит только `WebhookDeliveryStorage` и `NonceStorage`.
+Under `yiisoft/config` this package binds only `WebhookDeliveryStorage` and
+`NonceStorage`.
 
-## Миграция
+## Migration
 
-Регистрируйте поставляемую миграцию
+Register the bundled migration
 (`Rasuvaeff\Yii3WebhooksDb\Migration\M260612000000CreateWebhookTables`)
-**по namespace** — без путей в `vendor/`:
+**by namespace** — no vendor paths:
 
 ```php
 // config/common/di/migration.php
@@ -66,61 +68,64 @@ return [
 ./yii migrate:up
 ```
 
-Имена таблиц задаются в params — те же значения получают и миграция, и оба
-хранилища (через `WebhookDeliveryTableName` / `WebhookNonceTableName`):
+Set the table names in params — the same values reach the migration **and**
+both storages (as `WebhookDeliveryTableName` / `WebhookNonceTableName`):
 
 ```php
 // config/common/params.php
 'rasuvaeff/yii3-webhooks-db' => [
     'deliveryTable' => 'my_webhook_deliveries',
     'nonceTable' => 'my_webhook_nonces',
-    'table_prefix' => '',   // добавляется к обоим; например 'rsv_' → rsv_my_webhook_deliveries
+    'table_prefix' => '',   // prepended to both; e.g. 'rsv_' → rsv_my_webhook_deliveries
 ],
 ```
 
-Имена индексов следуют за именами таблиц, поэтому две инсталляции могут делить
-одну схему PostgreSQL — там имена индексов уникальны в пределах схемы, а не
-таблицы.
+Index names follow the table names, so two installations can share one
+PostgreSQL schema — index names are unique per schema there, not per table.
 
-> **Не настраивайте миграцию через DI-контейнер.**
-> `M...::class => ['__construct()' => [...]]` не работает: миграцию создаёт
-> `Injector::make()`, который резолвит аргументы по типу и никогда не читает
-> определение контейнера по имени класса самой миграции. Хуже того, добавление
-> такого определения роняет контейнер на этапе сборки в **каждом** запросе,
-> потому что класс не автозагружается, пока его не подключит раннер миграций.
-> Этот рецепт был описан в 1.x и никогда не работал.
+> **Do not configure the migration through the DI container.**
+> `M...::class => ['__construct()' => [...]]` does not work: the migration is
+> built by `Injector::make()`, which resolves arguments by type and never reads
+> a container definition keyed by the migration's own class. Worse, adding that
+> definition makes the container fatal at build time in **every** request,
+> because the class is not autoloadable until the migration runner requires it.
+> That recipe was documented in 1.x; it never worked.
 
-## Справочник API
+## API reference
 
 ### DbWebhookDeliveryStorage
 
-| Метод | Описание |
+| Method | Description |
 |---|---|
-| `save(delivery)` | Вставляет или обновляет запись доставки |
-| `findPending(limit)` | Возвращает ожидающие доставки, отсортированные по времени создания |
-| `markDelivered(delivery)` | Сохраняет доставку как успешно выполненную |
-| `markFailed(delivery)` | Сохраняет доставку как неуспешную |
-| `getById(id)` | Загружает доставку по ID |
+| `save(delivery)` | Inserts or updates the delivery record |
+| `findPending(limit)` | Returns pending deliveries, oldest first |
+| `markDelivered(delivery)` | Stores the delivery as succeeded |
+| `markFailed(delivery)` | Stores the delivery as failed |
+| `getById(id)` | Loads a delivery by id |
 
 ### DbNonceStorage
 
-| Метод | Описание |
+| Method | Description |
 |---|---|
-| `has(nonce)` | Проверяет, существует ли nonce |
-| `add(nonce)` | Атомарная вставка; возвращает false при дубликате |
-| `deleteOlderThan(threshold)` | Удаляет устаревшие nonce для очистки по сроку хранения |
+| `has(nonce)` | Whether the nonce is already known |
+| `add(nonce)` | Atomic insert; returns false on a duplicate |
+| `deleteOlderThan(threshold)` | Drops stale nonces for retention cleanup |
 
-## Безопасность
+## Security
 
-- `DbNonceStorage::add()` опирается на первичный ключ и перехватывает ошибки дублирования ключа.
-- `DbWebhookDeliveryStorage` сохраняет только данные `WebhookDelivery`, секреты endpoint'ов не хранятся.
-- Держите записи nonce не менее времени, равного допустимому окну временно́й метки webhook'а.
+- `DbNonceStorage::add()` relies on the primary key and catches duplicate-key
+  errors — that is what makes replay protection atomic instead of a
+  check-then-write race.
+- `DbWebhookDeliveryStorage` persists `WebhookDelivery` fields only; endpoint
+  secrets are never stored.
+- Keep nonce rows for at least the webhook timestamp tolerance window: prune
+  them sooner and a replay becomes possible again.
 
-## Примеры
+## Examples
 
-Смотрите [examples/](examples/) для запускаемого примера на SQLite.
+See [examples/](examples/) for a runnable SQLite example.
 
-## Разработка
+## Development
 
 ```bash
 make install
@@ -132,6 +137,6 @@ make mutation
 make release-check
 ```
 
-## Лицензия
+## License
 
-BSD-3-Clause. Смотрите [LICENSE.md](LICENSE.md).
+BSD-3-Clause. See [LICENSE.md](LICENSE.md).
