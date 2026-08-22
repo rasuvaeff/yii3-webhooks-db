@@ -50,8 +50,19 @@ $deliveries->save(delivery: $workerA[0]->withAttempt(at: $now, error: 'HTTP 503'
 $deliveries->releaseClaim(delivery: $workerA[0]);
 
 echo 'ready again now=' . count($deliveries->claimReady(now: $now, readyThresholds: $thresholds, maxAttempts: 3)) . PHP_EOL;
-echo 'ready again in 30s=' . count($deliveries->claimReady(
-    now: $now->modify('+30 seconds'),
-    readyThresholds: [1 => $now],
+
+$later = $now->modify('+30 seconds');
+$reclaimed = $deliveries->claimReady(now: $later, readyThresholds: [1 => $now], maxAttempts: 3);
+
+echo 'ready again in 30s=' . count($reclaimed) . PHP_EOL;
+
+// Every claimed delivery has to be moved on, or it waits out the whole lease
+// before anyone sees it again. This attempt succeeds, so it is terminated.
+$deliveries->markDelivered(delivery: $reclaimed[0]->withAttempt(at: $later));
+
+echo 'delivered=' . ($deliveries->getById(id: $delivery->getId())?->getStatus()->value ?? 'gone') . PHP_EOL;
+echo 'still claimable=' . count($deliveries->claimReady(
+    now: $later,
+    readyThresholds: [1 => $later],
     maxAttempts: 3,
 )) . PHP_EOL;

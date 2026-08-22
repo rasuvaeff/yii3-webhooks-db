@@ -1,6 +1,22 @@
 # Upgrade guide
 
-## 2.x → next
+## 2.x → 3.0
+
+### 1. Upgrade the core first
+
+This release requires `rasuvaeff/yii3-webhooks` ^2.0 and cannot be installed
+beside a 1.x core. `DbWebhookDeliveryStorage` declares `ClaimingDeliveryStorage`,
+which 2.0.0 introduces, and a worker takes the claiming path only for a storage
+that declares it — the core checks with `instanceof` and nothing else.
+
+```bash
+composer require rasuvaeff/yii3-webhooks:^2.0
+composer require rasuvaeff/yii3-webhooks-db:^3.0
+```
+
+The core has its own upgrade notes; read them before this file.
+
+### 2. Apply the migration
 
 `DbWebhookDeliveryStorage::claimReady()` reads two new columns. Apply the new
 migration before deploying code that calls it:
@@ -9,20 +25,28 @@ migration before deploying code that calls it:
 ./yii migrate:up
 ```
 
-It adds `claimed_at` and `claimed_by` to the delivery table, both nullable, and
-touches nothing else. `M260612000000CreateWebhookTables` is unchanged, so an
-installation that already ran it only gets
-`M260822120000AddDeliveryClaimColumns`.
+It adds `claimed_at` and `claimed_by` to the delivery table, both nullable, plus
+an index on `claimed_by`, and touches nothing else.
+`M260612000000CreateWebhookTables` is unchanged, so an installation that already
+ran it only gets `M260822120000AddDeliveryClaimColumns`.
 
 Rolling the migration back works on MySQL and PostgreSQL only —
 `yiisoft/db-sqlite` cannot drop a column.
 
+### 3. Stop relying on `save()` to change a status
+
 `save()` no longer writes the `status` of a row that already exists. If your
 worker relied on `save()` to move a delivery back to `pending`, use the storage's
 own transitions instead: `markDelivered()`, `markFailed()`, or `releaseClaim()`.
-Nothing in the public API changed shape, so the backward-compatibility check has
-nothing to report — the break is in behaviour, and this is the only place it is
-written down.
+
+Every existing method keeps the signature it had in 2.x, and the class gained
+`claimReady()`, `releaseClaim()` and `deleteOlderThan()` — the public API is
+extended, not reshaped. That is why the backward-compatibility check reports
+nothing: it compares PHP signatures, and the breaks in this release are the
+required core version, the schema and the behaviour above. This file is the only
+place they are written down.
+
+### 4. Audit `endpoint_url` once
 
 Finally, audit `endpoint_url` once. Older core versions accepted
 `https://user:pass@host/hook`, and this backend copies the URL into every

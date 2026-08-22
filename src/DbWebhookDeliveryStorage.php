@@ -6,6 +6,7 @@ namespace Rasuvaeff\Yii3WebhooksDb;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use Rasuvaeff\Yii3Webhooks\ClaimingDeliveryStorage;
 use Rasuvaeff\Yii3Webhooks\WebhookDelivery;
 use Rasuvaeff\Yii3Webhooks\WebhookDeliveryStatus;
 use Rasuvaeff\Yii3Webhooks\WebhookDeliveryStorage;
@@ -23,21 +24,23 @@ use Yiisoft\Db\Query\Query;
  * claimable again once `claimed_at` is older than the lease, so a worker killed
  * mid-flight strands nothing.
  *
- * Those two methods carry the signature of `ClaimingDeliveryStorage` in
- * `rasuvaeff/yii3-webhooks`, and the `implements` clause is added once the core
- * release carrying that interface is out — declaring it now would make this
- * package uninstallable against every published core version.
+ * The `ClaimingDeliveryStorage` clause is what a worker detects with
+ * `instanceof` before it takes the claiming path, so it is not decoration: drop
+ * it and the core silently falls back to `findPending()`, the very double
+ * delivery the lease exists to prevent.
  *
  * @api
  */
-final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
+final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage, ClaimingDeliveryStorage
 {
     /**
      * The columns {@see self::save()} withholds from a row that already exists.
      *
-     * `id` is the key, and `status` belongs to `mark*`/the claim: writing it back
-     * would let a worker holding a stale `Pending` copy resurrect a delivery
-     * somebody else already finished, and send the same webhook twice.
+     * `id` is the key, and `status` belongs to `markDelivered()`/`markFailed()`
+     * alone — the claim writes the lease columns and leaves the status alone.
+     * Writing it back here would let a worker holding a stale `Pending` copy
+     * resurrect a delivery somebody else already finished, and send the same
+     * webhook twice.
      */
     private const array SAVE_PROTECTED_COLUMNS = ['id', 'status'];
 
@@ -105,8 +108,10 @@ final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
      * it: it stays `Pending` forever, invisible to an alert watching `Failed`.
      *
      * $readyThresholds comes from `WebhookRetryPolicy::readyThresholds()`; the
-     * backoff is the core's business and is never re-derived here. The threshold
-     * of the highest key applies to every larger attempt count as well.
+     * backoff is the core's business and is never re-derived here. Each key
+     * governs every attempt count from itself up to the next key, and the
+     * highest one governs everything above it — a map that skips a count still
+     * has a rule for it.
      *
      * The lease is stamped with a token unique to this call, so the read-back
      * returns exactly the rows this call won and no transaction is needed: the
@@ -123,6 +128,7 @@ final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
      *
      * @return list<WebhookDelivery>
      */
+    #[\Override]
     public function claimReady(
         DateTimeImmutable $now,
         array $readyThresholds,
@@ -147,8 +153,8 @@ final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
             ->column();
 
         // an idle poll stops after that one SELECT: neither the write lock of a
-        // no-op UPDATE nor a scan of the unindexed claimed_by is worth paying on
-        // every cycle of a worker with nothing to do
+        // no-op UPDATE nor the extra claimed_by lookup behind it is worth paying
+        // on every cycle of a worker with nothing to do
         if ($candidates !== []) {
             $token = bin2hex(random_bytes(16));
 
@@ -184,6 +190,7 @@ final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
      * Returns true when a lease was actually cleared — false means the delivery
      * is unknown, no longer pending, or was not leased at all.
      */
+    #[\Override]
     public function releaseClaim(WebhookDelivery $delivery): bool
     {
         return $this->db->createCommand()->update(
@@ -314,9 +321,17 @@ final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
      * The backoff rule as SQL, or null when the policy has no retry step to wait
      * for and every pending delivery is ready.
      *
-     * The highest key is compared with `>=` rather than `=`: the core stops the
-     * map where the delay stops growing, so that one threshold stands for every
-     * larger attempt count.
+     * Every key stands for a range — its own attempt count up to the next key,
+     * exclusive — so that the branches partition every attempt count between
+     * them and none can fall through. A key is not required to have a successor:
+     * `WebhookRetryPolicy::readyThresholds()` numbers them contiguously, but a
+     * map built by hand may skip counts, and under an equality test `[1 => …,
+     * 3 => …]` left a delivery on its second attempt matching no branch at all —
+     * never ready, never exhausted, stuck `Pending` for good.
+     *
+     * The highest key has no upper bound: the core ends the map where the delay
+     * stops growing, so that one threshold stands for every larger attempt
+     * count.
      *
      * @param array<int, DateTimeImmutable> $readyThresholds
      *
@@ -329,27 +344,35 @@ final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage
         }
 
         // the core hands the map back in ascending order; sorting here means the
-        // highest key is the highest attempt count even if a caller builds it
-        // by hand and does not
+        // ranges below are built from neighbours even if a caller builds the map
+        // by hand and does not sort it
         ksort($readyThresholds);
-
-        $firstCount = array_key_first($readyThresholds);
-        $lastCount = array_key_last($readyThresholds);
 
         $condition = [
             'or',
             ['last_attempt_at' => null],
-            ['<', 'attempts', $firstCount],
+            ['<', 'attempts', array_key_first($readyThresholds)],
             // out of attempts: handed out so that something can finally fail it
             ['>=', 'attempts', $maxAttempts],
         ];
 
-        foreach ($readyThresholds as $count => $threshold) {
-            $elapsed = ['<=', 'last_attempt_at', DateTimeSerializer::format(dateTime: $threshold)];
+        // walking down from the highest key, the count handled by the previous
+        // iteration is exactly where this one's range ends
+        $upperBound = null;
 
-            $condition[] = $count === $lastCount
-                ? ['and', ['>=', 'attempts', $count], $elapsed]
-                : ['and', ['attempts' => $count], $elapsed];
+        foreach (array_reverse($readyThresholds, preserve_keys: true) as $count => $threshold) {
+            $branch = [
+                'and',
+                ['>=', 'attempts', $count],
+                ['<=', 'last_attempt_at', DateTimeSerializer::format(dateTime: $threshold)],
+            ];
+
+            if ($upperBound !== null) {
+                $branch[] = ['<', 'attempts', $upperBound];
+            }
+
+            $condition[] = $branch;
+            $upperBound = $count;
         }
 
         return $condition;

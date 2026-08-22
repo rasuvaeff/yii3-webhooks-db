@@ -34,10 +34,10 @@ use Yiisoft\Db\Migration\TransactionalMigrationInterface;
  *
  * @api
  */
-final class M260822120000AddDeliveryClaimColumns implements RevertibleMigrationInterface, TransactionalMigrationInterface
+final readonly class M260822120000AddDeliveryClaimColumns implements RevertibleMigrationInterface, TransactionalMigrationInterface
 {
     public function __construct(
-        private readonly WebhookDeliveryTableName $deliveryTable = new WebhookDeliveryTableName(),
+        private WebhookDeliveryTableName $deliveryTable = new WebhookDeliveryTableName(),
     ) {}
 
     #[\Override]

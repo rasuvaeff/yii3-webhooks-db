@@ -10,6 +10,7 @@ use Rasuvaeff\Yii3Webhooks\WebhookDelivery;
 use Rasuvaeff\Yii3Webhooks\WebhookDeliveryStatus;
 use Rasuvaeff\Yii3Webhooks\WebhookEndpoint;
 use Rasuvaeff\Yii3Webhooks\WebhookEvent;
+use Rasuvaeff\Yii3Webhooks\WebhookRetryPolicy;
 use Rasuvaeff\Yii3WebhooksDb\DbNonceStorage;
 use Rasuvaeff\Yii3WebhooksDb\DbWebhookDeliveryStorage;
 use Testo\Assert;
@@ -375,8 +376,10 @@ final class SqliteIntegrationTest
      * of one and above are ready once their last attempt is that old.
      *
      * Built by hand rather than through `WebhookRetryPolicy::readyThresholds()`
-     * because this package still resolves against a published core that has no
-     * such method — see the note on `DbWebhookDeliveryStorage::claimReady()`.
+     * so that the maps below can also take shapes the core never produces — a
+     * skipped attempt count above all — which is exactly where the readiness
+     * rule used to lose a delivery. `claimReadyAgreesWithTheCoreRetryPolicy()`
+     * pins the real thing.
      *
      * @return array<int, DateTimeImmutable>
      */
@@ -530,6 +533,74 @@ final class SqliteIntegrationTest
         $thresholds = [2 => $now->modify('-60 seconds'), 1 => $now->modify('-30 seconds')];
 
         Assert::same($this->claim($storage, thresholds: $thresholds), []);
+    }
+
+    /**
+     * A hand-built map may skip an attempt count — the docblock invites one, and
+     * only `readyThresholds()` numbers them contiguously. Each key governs the
+     * counts up to the next one, so `[1 => …, 3 => …]` still has a rule for a
+     * delivery on its second attempt. Under the equality test this replaces,
+     * that delivery matched no branch at all and was never handed out again.
+     */
+    public function claimReadyUsesTheNearestLowerThresholdForACountBetweenKeys(): void
+    {
+        $storage = new DbWebhookDeliveryStorage(db: $this->db);
+        $storage->save(delivery: $this->attempted(id: 'att-1', attempts: 1, agoSeconds: 45));
+        $storage->save(delivery: $this->attempted(id: 'att-2', attempts: 2, agoSeconds: 45, createdAt: '2026-06-12 09:00:00'));
+        $now = new DateTimeImmutable(self::NOW);
+
+        // attempt 1 and 2 wait 30 seconds, attempt 3 and above wait 90
+        $thresholds = [1 => $now->modify('-30 seconds'), 3 => $now->modify('-90 seconds')];
+
+        Assert::same($this->claim($storage, thresholds: $thresholds, maxAttempts: 5), ['att-1', 'att-2']);
+    }
+
+    /**
+     * The other end of that range: a count that has a key of its own must not
+     * borrow the shorter wait of a lower one.
+     */
+    public function claimReadyDoesNotApplyALowerThresholdToAHigherAttemptCount(): void
+    {
+        $storage = new DbWebhookDeliveryStorage(db: $this->db);
+        $storage->save(delivery: $this->attempted(id: 'att-3', attempts: 3, agoSeconds: 45));
+        $now = new DateTimeImmutable(self::NOW);
+
+        $thresholds = [1 => $now->modify('-30 seconds'), 3 => $now->modify('-90 seconds')];
+
+        // 45 seconds clears the 30-second threshold of key 1 but not the
+        // 90-second one that actually governs a third attempt
+        Assert::same($this->claim($storage, thresholds: $thresholds, maxAttempts: 5), []);
+    }
+
+    /**
+     * The map this backend is built for comes from the core, not from a test
+     * helper: the shape `WebhookRetryPolicy::readyThresholds()` produces has to
+     * select the same deliveries the policy's own `isReadyForRetry()` accepts.
+     */
+    public function claimReadyAgreesWithTheCoreRetryPolicy(): void
+    {
+        $storage = new DbWebhookDeliveryStorage(db: $this->db);
+        $policy = WebhookRetryPolicy::exponential(maxAttempts: 5, baseSeconds: 30, cap: 240);
+        $now = new DateTimeImmutable(self::NOW);
+
+        // 30, 60, 120, 240 seconds of backoff for attempts one to four
+        $waiting = $this->attempted(id: 'waiting', attempts: 2, agoSeconds: 59);
+        $ready = $this->attempted(id: 'ready', attempts: 2, agoSeconds: 60, createdAt: '2026-06-12 09:00:00');
+
+        $storage->save(delivery: $waiting);
+        $storage->save(delivery: $ready);
+
+        Assert::false($policy->isReadyForRetry(delivery: $waiting, now: $now));
+        Assert::true($policy->isReadyForRetry(delivery: $ready, now: $now));
+        Assert::same(
+            $this->claim(
+                $storage,
+                now: $now,
+                thresholds: $policy->readyThresholds($now),
+                maxAttempts: $policy->getMaxAttempts(),
+            ),
+            ['ready'],
+        );
     }
 
     /**

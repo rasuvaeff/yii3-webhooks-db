@@ -1,28 +1,49 @@
 # Changelog
 
-## Unreleased
+## 3.0.0 — 2026-08-22
 
+**Breaking.** See [UPGRADE.md](UPGRADE.md): this release requires
+`rasuvaeff/yii3-webhooks` ^2.0, needs a schema migration, and changes what
+`save()` writes. The backward-compatibility check reports none of that — it
+compares PHP signatures, and the breaks here are in the required core version,
+in the schema and in behaviour.
+
+- **Breaking (dependency).** `rasuvaeff/yii3-webhooks` is now required at ^2.0,
+  up from ^1.0. `DbWebhookDeliveryStorage` declares `ClaimingDeliveryStorage`,
+  the interface 2.0.0 introduces, and a worker takes the claiming path only for
+  a storage that declares it — the core detects it with `instanceof` and nothing
+  else. Upgrade the core first; this package cannot be installed beside a 1.x
+  core any more.
 - `DbWebhookDeliveryStorage::claimReady()` and `releaseClaim()`: lease-based
-  claiming, so two workers polling the same table no longer deliver the same
-  webhook twice. The claim also filters by readiness — a backlog of deliveries
+  claiming, so two workers polling the same table no longer hand the same
+  delivery to both — for as long as the lease holds. A lease that expires before
+  its worker finishes is exactly what makes the delivery claimable again, so
+  `leaseSeconds` must outlive the slowest delivery attempt; set it too short and
+  a second worker re-claims a delivery still in flight and the receiver sees the
+  event twice. The claim also filters by readiness — a backlog of deliveries
   waiting out their backoff no longer fills every batch while the ready ones
   behind them starve — and it deliberately hands out deliveries that are out of
-  attempts, because nothing else could ever mark them `Failed`. Ownership is a
-  lease, not a status: a claimed delivery stays `pending` and becomes claimable
-  again once `claimed_at` is older than `leaseSeconds`, so a worker that dies
-  strands nothing. The methods carry the signature of `ClaimingDeliveryStorage`
-  in `rasuvaeff/yii3-webhooks`; the `implements` clause follows the core release
-  that introduces it.
-- **New migration** `M260822120000AddDeliveryClaimColumns` adds the nullable
-  `claimed_at` / `claimed_by` columns the claim needs. Apply it before deploying
-  code that calls `claimReady()` — see [UPGRADE.md](UPGRADE.md). Rolling it back
-  works on MySQL and PostgreSQL only: `yiisoft/db-sqlite` cannot drop a column.
+  attempts, because nothing else could ever mark them `Failed`.
+- Ownership is a lease, not a status: a claimed delivery stays `pending`, the
+  claim writes only the `claimed_at` / `claimed_by` columns, and the delivery
+  becomes claimable again once `claimed_at` is older than `leaseSeconds` — a
+  worker that dies strands nothing.
+- Each `readyThresholds` key governs every attempt count from itself up to the
+  next key, rather than that one count alone. A map that skips a count — legal,
+  since callers may build one by hand — used to leave a delivery on the skipped
+  count matching no branch at all: never ready, never exhausted, stuck `pending`
+  for good.
+- **Breaking (schema).** New migration `M260822120000AddDeliveryClaimColumns`
+  adds the nullable `claimed_at` / `claimed_by` columns the claim needs, plus an
+  index on `claimed_by`. Apply it before deploying code that calls
+  `claimReady()` — see [UPGRADE.md](UPGRADE.md). Rolling it back works on MySQL
+  and PostgreSQL only: `yiisoft/db-sqlite` cannot drop a column.
 - **Breaking (behaviour).** `save()` no longer writes the `status` of a delivery
   that already exists. The upsert used to overwrite every column, so a worker
   that lost the race and still held a stale `pending` copy put a finished
-  delivery back into the queue and the webhook went out again. Status now belongs
-  to `markDelivered()`/`markFailed()`/the claim; the attempt state is still
-  written.
+  delivery back into the queue and the webhook went out again. Status is now
+  written by `markDelivered()`/`markFailed()` alone, and lease ownership by the
+  claim; the attempt state is still written by `save()`.
 - `markDelivered()`/`markFailed()` clear the lease on the terminal transition, so
   a finished row never looks busy to whoever reads the table.
 - `DbWebhookDeliveryStorage::deleteOlderThan()`: retention for the delivery

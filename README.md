@@ -17,9 +17,9 @@ production-grade record of delivery attempts and atomic replay protection.
 ## Requirements
 
 - PHP 8.3+
-- `rasuvaeff/yii3-webhooks` ^1.0
+- `rasuvaeff/yii3-webhooks` ^2.0
 - `yiisoft/db` ^2.0
-- `yiisoft/db-migration` ^2.0
+- `yiisoft/db-migration` ^2.1
 - `psr/clock` ^1.0
 
 ## Installation
@@ -82,9 +82,18 @@ delivery attempt, or two workers get the same delivery. A delivery that is out
 of attempts **is** handed out — nothing else could ever mark it `Failed`.
 
 `readyThresholds()` comes from `WebhookRetryPolicy` in `rasuvaeff/yii3-webhooks`;
-the backoff rule is the core's and is never re-derived here. Once the core
-release carrying `ClaimingDeliveryStorage` is out, this class will declare it and
-a worker can pick the path with `instanceof`.
+the backoff rule is the core's and is never re-derived here. Each key governs
+every attempt count from itself up to the next key, so a map built by hand may
+skip counts without stranding the deliveries that land on them.
+
+`DbWebhookDeliveryStorage` declares `ClaimingDeliveryStorage`, which is how a
+worker picks the claiming path:
+
+```php
+if (!$storage instanceof ClaimingDeliveryStorage) {
+    throw new RuntimeException($storage::class . ' cannot claim; run a single worker instead');
+}
+```
 
 ### Retention
 
@@ -164,7 +173,7 @@ PostgreSQL schema — index names are unique per schema there, not per table.
 | `releaseClaim(delivery)` | Gives a lease back early; false when there was none |
 | `markDelivered(delivery)` | Stores the delivery as succeeded, if it is still pending |
 | `markFailed(delivery)` | Stores the delivery as failed, if it is still pending |
-| `deleteOlderThan(threshold, ...statuses)` | Deletes finished deliveries created before the threshold; returns the row count |
+| `deleteOlderThan(threshold, ...statuses)` | Deletes deliveries created before the threshold; returns the row count. The terminal statuses are the default — passing statuses explicitly can include `Pending`, which deletes work that was never done |
 | `getById(id)` | Loads a delivery by id |
 
 ### DbNonceStorage

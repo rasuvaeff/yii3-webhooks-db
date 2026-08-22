@@ -108,9 +108,9 @@ final class MigrationTableNameTest
         $migration->up($this->builder());
 
         $deliveryIndexes = $this->indexNames('custom_deliveries');
-        Assert::true(in_array('idx_custom_deliveries_status_created', $deliveryIndexes, true));
-        Assert::true(in_array('idx_custom_deliveries_event_id', $deliveryIndexes, true));
-        Assert::true(in_array('idx_custom_nonces_created_at', $this->indexNames('custom_nonces'), true));
+        Assert::true(in_array('idx_custom_deliveries_status_created', $deliveryIndexes, strict: true));
+        Assert::true(in_array('idx_custom_deliveries_event_id', $deliveryIndexes, strict: true));
+        Assert::true(in_array('idx_custom_nonces_created_at', $this->indexNames('custom_nonces'), strict: true));
     }
 
     public function indexesCoverTheDocumentedColumns(): void

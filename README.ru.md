@@ -16,9 +16,9 @@
 ## Требования
 
 - PHP 8.3+
-- `rasuvaeff/yii3-webhooks` ^1.0
+- `rasuvaeff/yii3-webhooks` ^2.0
 - `yiisoft/db` ^2.0
-- `yiisoft/db-migration` ^2.0
+- `yiisoft/db-migration` ^2.1
 - `psr/clock` ^1.0
 
 ## Установка
@@ -82,8 +82,18 @@ foreach ($batch as $delivery) {
 
 `readyThresholds()` приходит из `WebhookRetryPolicy` пакета
 `rasuvaeff/yii3-webhooks`: правило backoff принадлежит ядру и здесь не
-пересчитывается. Как только выйдет релиз ядра с `ClaimingDeliveryStorage`, класс
-объявит этот интерфейс, и worker сможет выбирать путь через `instanceof`.
+пересчитывается. Каждый ключ действует на все счётчики попыток от себя до
+следующего ключа, поэтому карта, собранная руками, может пропускать значения —
+доставки с такими счётчиками не застрянут.
+
+`DbWebhookDeliveryStorage` объявляет `ClaimingDeliveryStorage` — именно так
+worker выбирает путь с захватом:
+
+```php
+if (!$storage instanceof ClaimingDeliveryStorage) {
+    throw new RuntimeException($storage::class . ' cannot claim; run a single worker instead');
+}
+```
 
 ### Удержание записей
 
@@ -165,7 +175,7 @@ PostgreSQL — `yiisoft/db-sqlite` не умеет удалять колонки
 | `releaseClaim(delivery)` | Досрочно возвращает аренду; false, если её не было |
 | `markDelivered(delivery)` | Сохраняет доставку как успешную, если она ещё `Pending` |
 | `markFailed(delivery)` | Сохраняет доставку как неуспешную, если она ещё `Pending` |
-| `deleteOlderThan(threshold, ...statuses)` | Удаляет завершённые доставки, созданные раньше порога; возвращает число строк |
+| `deleteOlderThan(threshold, ...statuses)` | Удаляет доставки, созданные раньше порога; возвращает число строк. По умолчанию — терминальные статусы; явно переданные могут включать `Pending`, и тогда удалится работа, которая так и не была сделана |
 | `getById(id)` | Загружает доставку по ID |
 
 ### DbNonceStorage

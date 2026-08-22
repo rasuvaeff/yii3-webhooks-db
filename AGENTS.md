@@ -63,13 +63,20 @@ make release-check
   columns.
 - `composer test` runs only the Unit suite; `composer mutation` runs every
   suite.
-- **`claimReady()` mirrors `ClaimingDeliveryStorage` without declaring it.** The
-  interface lives in `rasuvaeff/yii3-webhooks` and is not in a published release
-  yet; adding `implements` — or naming any unreleased core symbol anywhere in
-  `src/` or `tests/`, including a docblock type — makes this package
-  uninstallable in CI, which resolves against the published core. The
-  `implements` clause and the `readyThresholds()` calls in tests land together
-  with the core release. The signatures must stay identical in the meantime.
+- **`DbWebhookDeliveryStorage` must keep declaring `ClaimingDeliveryStorage`.**
+  The core (^2.0) detects the claiming path with `instanceof` and nothing else:
+  drop the clause and every worker silently falls back to `findPending()`, which
+  is the double delivery the lease exists to prevent. `claimReady()` /
+  `releaseClaim()` must match the interface byte for byte — a divergence is a
+  fatal error at install time, not a test failure.
+- **Never name a core symbol that is not in a published release** — not in
+  `src/`, not in `tests/`, not in a docblock type. CI resolves against the
+  published core, so an unreleased name makes the package uninstallable there
+  while a local build stays green.
+- **Each `readyThresholds` key covers a range**, from its own attempt count up to
+  the next key, and the highest key covers everything above it. A map may skip
+  counts — an equality test left those deliveries matching no branch, never ready
+  and never exhausted, stuck `pending` for good.
 - **Ownership is a lease, not a status.** A claimed delivery stays `pending` and
   becomes claimable again once `claimed_at` is older than `leaseSeconds`. Never
   add a fourth `WebhookDeliveryStatus` for it: a worker that dies must not leave

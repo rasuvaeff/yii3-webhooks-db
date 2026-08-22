@@ -26,11 +26,11 @@ use Yiisoft\Db\Migration\TransactionalMigrationInterface;
  *
  * @api
  */
-final class M260612000000CreateWebhookTables implements RevertibleMigrationInterface, TransactionalMigrationInterface
+final readonly class M260612000000CreateWebhookTables implements RevertibleMigrationInterface, TransactionalMigrationInterface
 {
     public function __construct(
-        private readonly WebhookDeliveryTableName $deliveryTable = new WebhookDeliveryTableName(),
-        private readonly WebhookNonceTableName $nonceTable = new WebhookNonceTableName(),
+        private WebhookDeliveryTableName $deliveryTable = new WebhookDeliveryTableName(),
+        private WebhookNonceTableName $nonceTable = new WebhookNonceTableName(),
     ) {}
 
     #[\Override]

@@ -53,11 +53,19 @@ $batch = $deliveryStorage->claimReady(
     limit: 100,
 );
 
+// exactly one branch per delivery: a claim is finished, failed or handed back
 foreach ($batch as $delivery) {
-    // terminate, or give the lease back for a retryable failure
-    $deliveryStorage->markDelivered($delivery->withAttempt($now));
-    // $deliveryStorage->save($delivery->withAttempt($now, error: $error));
-    // $deliveryStorage->releaseClaim($delivery);
+    $error = $sender->send($delivery); // null on success, the message otherwise
+    $attempted = $delivery->withAttempt($now, error: $error);
+
+    if ($error === null) {
+        $deliveryStorage->markDelivered($attempted);       // terminal: delivered
+    } elseif ($delivery->getAttempts() + 1 >= $policy->getMaxAttempts()) {
+        $deliveryStorage->markFailed($attempted);          // terminal: out of attempts
+    } else {
+        $deliveryStorage->save($attempted);                // retryable: record the attempt
+        $deliveryStorage->releaseClaim($delivery);         // and give the lease back
+    }
 }
 ```
 
