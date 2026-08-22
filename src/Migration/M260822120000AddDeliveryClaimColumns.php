@@ -47,12 +47,29 @@ final class M260822120000AddDeliveryClaimColumns implements RevertibleMigrationI
         $b->addColumn($this->deliveryTable->value, 'claimed_at', 'string(30)');
         // 32 hex characters, the token one claimReady() call stamps its rows with
         $b->addColumn($this->deliveryTable->value, 'claimed_by', 'string(32)');
+
+        // every successful claim reads its own rows back by token; without this
+        // index that is a sequential scan of a table nothing prunes by itself.
+        // The candidate SELECT is a different query and keeps using
+        // (status, created_at) — it orders by created_at.
+        $b->createIndex($this->deliveryTable->value, $this->indexName(), 'claimed_by');
     }
 
     #[\Override]
     public function down(MigrationBuilder $b): void
     {
+        $b->dropIndex($this->deliveryTable->value, $this->indexName());
         $b->dropColumn($this->deliveryTable->value, 'claimed_by');
         $b->dropColumn($this->deliveryTable->value, 'claimed_at');
+    }
+
+    /**
+     * Index names follow the table's name: in PostgreSQL they are unique per
+     * schema, so two installations sharing one schema would collide on a
+     * hard-coded name.
+     */
+    private function indexName(): string
+    {
+        return sprintf('idx_%s_claimed_by', $this->deliveryTable->forIndexName());
     }
 }

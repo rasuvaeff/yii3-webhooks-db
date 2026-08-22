@@ -99,6 +99,32 @@ final class ClaimColumnsMigrationTest
     }
 
     /**
+     * The claim reads its own rows back by `claimed_by` on every successful
+     * poll, against a table nothing prunes by itself — without the index that is
+     * a sequential scan of the whole backlog.
+     */
+    public function indexesClaimedByForTheReadBack(): void
+    {
+        $this->migrate(new SimpleContainer([]));
+
+        Assert::same($this->indexColumns('idx_webhook_deliveries_claimed_by'), ['claimed_by']);
+    }
+
+    /**
+     * PostgreSQL index names are unique per schema, not per table, so two
+     * installations sharing one schema would collide on a hard-coded name.
+     */
+    public function theIndexNameFollowsTheTableName(): void
+    {
+        $this->migrate(new SimpleContainer([
+            WebhookDeliveryTableName::class => new WebhookDeliveryTableName('custom_deliveries'),
+            WebhookNonceTableName::class => new WebhookNonceTableName('custom_nonces'),
+        ]));
+
+        Assert::same($this->indexColumns('idx_custom_deliveries_claimed_by'), ['claimed_by']);
+    }
+
+    /**
      * `down()` drops the two columns, which `yiisoft/db-sqlite` cannot do at
      * all — the rollback is a MySQL/PostgreSQL-only path, and this pins the
      * fact so it is not discovered during an incident.
@@ -140,5 +166,22 @@ final class ClaimColumnsMigrationTest
     private function builder(): MigrationBuilder
     {
         return new MigrationBuilder($this->db, new NullMigrationInformer());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function indexColumns(string $index): array
+    {
+        $columns = [];
+
+        /** @var array<array-key, mixed> $row */
+        foreach ($this->db->createCommand(sprintf('PRAGMA index_info(%s)', $index))->queryAll() as $row) {
+            if (is_array($row) && is_string($row['name'] ?? null)) {
+                $columns[] = $row['name'];
+            }
+        }
+
+        return $columns;
     }
 }

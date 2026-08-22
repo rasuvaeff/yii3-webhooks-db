@@ -20,6 +20,16 @@ Rolling the migration back works on MySQL and PostgreSQL only —
 `save()` no longer writes the `status` of a row that already exists. If your
 worker relied on `save()` to move a delivery back to `pending`, use the storage's
 own transitions instead: `markDelivered()`, `markFailed()`, or `releaseClaim()`.
+Nothing in the public API changed shape, so the backward-compatibility check has
+nothing to report — the break is in behaviour, and this is the only place it is
+written down.
+
+Finally, audit `endpoint_url` once. Older core versions accepted
+`https://user:pass@host/hook`, and this backend copies the URL into every
+delivery row, so basic-auth credentials may sit in the table and in your backups.
+The core now refuses such URLs, but it cannot rewrite rows that already exist.
+Move those credentials into the endpoint's `headers`, which never reach the
+database.
 
 ## 1.x → 2.0
 

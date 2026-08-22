@@ -186,6 +186,11 @@ PostgreSQL schema — index names are unique per schema there, not per table.
   them sooner and a replay becomes possible again.
 - With more than one worker, use `claimReady()`. `findPending()` gives every
   worker the same rows, and the receiver sees the same event delivered twice.
+- `endpoint_url` is stored verbatim. `WebhookEndpoint` refuses credentials in the
+  URL, so nothing new can put a secret there — but rows written by an older core
+  version may still carry `https://user:pass@host/`. Audit the column once and
+  rewrite what you find; use endpoint `headers` for authentication, they never
+  reach the database.
 
 ## Examples
 
