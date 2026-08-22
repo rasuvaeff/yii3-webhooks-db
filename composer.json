@@ -24,7 +24,7 @@
     "require": {
         "php": "8.3 - 8.5",
         "psr/clock": "^1.0",
-        "rasuvaeff/yii3-webhooks": "^1.0",
+        "rasuvaeff/yii3-webhooks": "^2.0",
         "yiisoft/db": "^2.0",
         "yiisoft/db-migration": "^2.1"
     },
@@ -33,6 +33,7 @@
         "friendsofphp/php-cs-fixer": "^3.95",
         "infection/infection": "^0.33",
         "maglnet/composer-require-checker": "^4.17",
+        "rasuvaeff/rector-named-literals": "^1.0",
         "rector/rector": "^2.4",
         "roave/backward-compatibility-check": "^8.0",
         "testo/bridge-infection": "^0.1.6",
@@ -75,7 +76,7 @@
         }
     },
     "scripts": {
-        "bc-check": "roave-backward-compatibility-check",
+        "bc-check": "sh -c 'git config --global --add safe.directory \"*\" 2>/dev/null || true; roave-backward-compatibility-check \"$@\"' --",
         "bench": "testo --suite=Benchmarks -vv",
         "build": [
             "@composer validate --strict",
@@ -94,7 +95,7 @@
         "release-check": [
             "@build",
             "@rector",
-            "sh -c 'LATEST=$(git describe --tags --abbrev=0 2>/dev/null || true); if [ -n \"$LATEST\" ]; then composer bc-check -- --from=\"$LATEST\"; else echo \"No previous tag - skipping BC check\"; fi'"
+            "@bc-check"
         ],
         "require-checker": "composer-require-checker check composer.json",
         "test": "testo --suite=Unit",

@@ -10,6 +10,18 @@
     "testFramework": "testo",
     "minMsi": 100,
     "mutators": {
-        "@default": true
+        "@default": true,
+        // M260822120000AddDeliveryClaimColumns::down() drops the claim index and
+        // then the two claim columns. On SQLite the dropIndex() succeeds and
+        // dropColumn() is the first unsupported operation — yiisoft/db-sqlite
+        // cannot drop a column at all and throws NotSupportedException there.
+        // Every mutant of that method therefore dies on the identical exception,
+        // from the identical line, whatever it changes; ClaimColumnsMigrationTest pins the
+        // behaviour, but no assertion can tell the mutants apart. Exercising the
+        // rollback for real needs a MySQL or PostgreSQL service container, which
+        // this package's CI deliberately does not have.
+        "global-ignore": [
+            "Rasuvaeff\\Yii3WebhooksDb\\Migration\\M260822120000AddDeliveryClaimColumns::down"
+        ]
     }
 }

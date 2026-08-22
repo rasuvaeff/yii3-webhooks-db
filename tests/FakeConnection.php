@@ -21,14 +21,9 @@ use Yiisoft\Db\Transaction\TransactionInterface;
 /**
  * @internal
  */
-final class FakeConnection implements ConnectionInterface
+final readonly class FakeConnection implements ConnectionInterface
 {
-    private CommandInterface $command;
-
-    public function __construct(CommandInterface $command)
-    {
-        $this->command = $command;
-    }
+    public function __construct(private CommandInterface $command) {}
 
     public function createCommand(?string $sql = null, array $params = []): CommandInterface
     {

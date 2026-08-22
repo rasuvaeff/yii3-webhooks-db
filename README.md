@@ -17,9 +17,9 @@ production-grade record of delivery attempts and atomic replay protection.
 ## Requirements
 
 - PHP 8.3+
-- `rasuvaeff/yii3-webhooks` ^1.0
+- `rasuvaeff/yii3-webhooks` ^2.0
 - `yiisoft/db` ^2.0
-- `yiisoft/db-migration` ^2.0
+- `yiisoft/db-migration` ^2.1
 - `psr/clock` ^1.0
 
 ## Installation
@@ -47,6 +47,66 @@ $accepted = $nonces->add(nonce: $signature->getValue());
 Under `yiisoft/config` this package binds only `WebhookDeliveryStorage` and
 `NonceStorage`.
 
+### More than one worker
+
+`findPending()` hands the same rows to every worker that asks and knows nothing
+about backoff, so two workers deliver the same event twice and a backlog of
+deliveries waiting out their backoff fills every batch while ready ones behind
+them starve. `claimReady()` leases instead:
+
+```php
+$now = $clock->now();
+
+$batch = $deliveries->claimReady(
+    now: $now,
+    readyThresholds: $policy->readyThresholds($now),
+    maxAttempts: $policy->getMaxAttempts(),
+    leaseSeconds: 300,
+    limit: 100,
+);
+
+foreach ($batch as $delivery) {
+    // ... deliver, then move it out of the claim:
+    // $deliveries->markDelivered($delivery->withAttempt($now));
+    // $deliveries->markFailed($delivery->withAttempt($now, error: $error));
+    // or, for a retryable failure:
+    //   $deliveries->save($delivery->withAttempt($now, error: $error));
+    //   $deliveries->releaseClaim($delivery);
+}
+```
+
+Ownership is a lease, not a status: a claimed delivery stays `Pending` and
+becomes claimable again once `claimed_at` is older than `leaseSeconds`, so a
+worker that dies strands nothing. `leaseSeconds` must outlive the slowest
+delivery attempt, or two workers get the same delivery. A delivery that is out
+of attempts **is** handed out — nothing else could ever mark it `Failed`.
+
+`readyThresholds()` comes from `WebhookRetryPolicy` in `rasuvaeff/yii3-webhooks`;
+the backoff rule is the core's and is never re-derived here. Each key governs
+every attempt count from itself up to the next key, so a map built by hand may
+skip counts without stranding the deliveries that land on them.
+
+`DbWebhookDeliveryStorage` declares `ClaimingDeliveryStorage`, which is how a
+worker picks the claiming path:
+
+```php
+if (!$storage instanceof ClaimingDeliveryStorage) {
+    throw new RuntimeException($storage::class . ' cannot claim; run a single worker instead');
+}
+```
+
+### Retention
+
+Nothing else in this package removes a delivery row, so the table grows for as
+long as the application runs:
+
+```php
+$deleted = $deliveries->deleteOlderThan(new DateTimeImmutable('-90 days'));
+```
+
+The default statuses are the terminal ones. Passing `WebhookDeliveryStatus::Pending`
+deletes work that was never done — a decision the caller has to make out loud.
+
 ## Migration
 
 Register the bundled migration
@@ -67,6 +127,12 @@ return [
 ```bash
 ./yii migrate:up
 ```
+
+Two migrations live in that namespace: `M260612000000CreateWebhookTables` creates
+both tables, and `M260822120000AddDeliveryClaimColumns` adds the `claimed_at` /
+`claimed_by` columns `claimReady()` needs. An installation that already ran the
+first one only gets the second. `down()` on the second works on MySQL and
+PostgreSQL only — `yiisoft/db-sqlite` cannot drop a column.
 
 `yiisoft/db-migration` resolves the migration through `Injector::make()`, so
 it picks up the table-name value objects from the container the same way the
@@ -101,10 +167,13 @@ PostgreSQL schema — index names are unique per schema there, not per table.
 
 | Method | Description |
 |---|---|
-| `save(delivery)` | Inserts or updates the delivery record |
-| `findPending(limit)` | Returns pending deliveries, oldest first |
-| `markDelivered(delivery)` | Stores the delivery as succeeded |
-| `markFailed(delivery)` | Stores the delivery as failed |
+| `save(delivery)` | Inserts the delivery, or updates the attempt state of one already stored; never writes the status of an existing row |
+| `findPending(limit)` | Returns pending deliveries, oldest first — no lease, no backoff |
+| `claimReady(now, readyThresholds, maxAttempts, leaseSeconds?, limit?)` | Leases the ready deliveries to this worker alone |
+| `releaseClaim(delivery)` | Gives a lease back early; false when there was none |
+| `markDelivered(delivery)` | Stores the delivery as succeeded, if it is still pending |
+| `markFailed(delivery)` | Stores the delivery as failed, if it is still pending |
+| `deleteOlderThan(threshold, ...statuses)` | Deletes deliveries created before the threshold; returns the row count. The terminal statuses are the default — passing statuses explicitly can include `Pending`, which deletes work that was never done |
 | `getById(id)` | Loads a delivery by id |
 
 ### DbNonceStorage
@@ -124,6 +193,13 @@ PostgreSQL schema — index names are unique per schema there, not per table.
   secrets are never stored.
 - Keep nonce rows for at least the webhook timestamp tolerance window: prune
   them sooner and a replay becomes possible again.
+- With more than one worker, use `claimReady()`. `findPending()` gives every
+  worker the same rows, and the receiver sees the same event delivered twice.
+- `endpoint_url` is stored verbatim. `WebhookEndpoint` refuses credentials in the
+  URL, so nothing new can put a secret there — but rows written by an older core
+  version may still carry `https://user:pass@host/`. Audit the column once and
+  rewrite what you find; use endpoint `headers` for authentication, they never
+  reach the database.
 
 ## Examples
 

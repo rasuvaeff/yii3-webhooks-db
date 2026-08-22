@@ -19,7 +19,7 @@ final class FakeCommand implements CommandInterface
     public ?array $deleteCapture = null;
 
     public function __construct(
-        private int $executeResult = 1,
+        private readonly int $executeResult = 1,
     ) {}
 
     public function insert(string $table, array|QueryInterface $columns): static
