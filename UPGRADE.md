@@ -48,7 +48,7 @@ place they are written down.
 
 ### 4. Audit `endpoint_url` once
 
-Finally, audit `endpoint_url` once. Older core versions accepted
+Older core versions accepted
 `https://user:pass@host/hook`, and this backend copies the URL into every
 delivery row, so basic-auth credentials may sit in the table and in your backups.
 The core now refuses such URLs, but it cannot rewrite rows that already exist.

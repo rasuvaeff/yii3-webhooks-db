@@ -15,6 +15,12 @@ composer require rasuvaeff/yii3-webhooks-db
 - Config-plugin DI binds only `WebhookDeliveryStorage` and `NonceStorage`.
 - More than one worker => use `claimReady()`, never `findPending()`: the latter
   gives every worker the same rows and ignores backoff.
+- The class declares `ClaimingDeliveryStorage` (core ^2.0). A worker narrows the
+  injected `WebhookDeliveryStorage` with `instanceof ClaimingDeliveryStorage` and
+  throws when it fails — never fall back to `findPending()`, that is the double
+  delivery the lease prevents.
+- Each `readyThresholds` key covers every attempt count from itself up to the
+  next key; the highest key covers everything above it.
 - Ownership is a lease, not a status: a claimed delivery stays `Pending` and is
   claimable again once `claimed_at` is older than `leaseSeconds`.
 - `claimReady()` also hands out deliveries with `attempts >= maxAttempts` —
