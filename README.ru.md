@@ -45,6 +45,59 @@ $accepted = $nonces->add(nonce: $signature->getValue());
 
 При использовании `yiisoft/config` этот пакет биндит только `WebhookDeliveryStorage` и `NonceStorage`.
 
+### Больше одного worker-а
+
+`findPending()` отдаёт одни и те же строки каждому, кто спросит, и ничего не
+знает про backoff: два worker-а доставят одно событие дважды, а бэклог доставок,
+ожидающих backoff, займёт всю пачку, пока готовые за ними голодают.
+`claimReady()` вместо этого захватывает строки в аренду:
+
+```php
+$now = $clock->now();
+
+$batch = $deliveries->claimReady(
+    now: $now,
+    readyThresholds: $policy->readyThresholds($now),
+    maxAttempts: $policy->getMaxAttempts(),
+    leaseSeconds: 300,
+    limit: 100,
+);
+
+foreach ($batch as $delivery) {
+    // ... доставить, затем вывести из захвата:
+    // $deliveries->markDelivered($delivery->withAttempt($now));
+    // $deliveries->markFailed($delivery->withAttempt($now, error: $error));
+    // либо, при повторяемой ошибке:
+    //   $deliveries->save($delivery->withAttempt($now, error: $error));
+    //   $deliveries->releaseClaim($delivery);
+}
+```
+
+Владение — это аренда, а не статус: захваченная доставка остаётся `Pending` и
+снова становится доступной, как только `claimed_at` старше `leaseSeconds`, —
+умерший worker не оставляет ничего в состоянии, из которого нет выхода.
+`leaseSeconds` обязан переживать самую медленную попытку доставки, иначе одну
+доставку получат два worker-а. Доставка, исчерпавшая попытки, **выдаётся** —
+ничто иное не сможет пометить её `Failed`.
+
+`readyThresholds()` приходит из `WebhookRetryPolicy` пакета
+`rasuvaeff/yii3-webhooks`: правило backoff принадлежит ядру и здесь не
+пересчитывается. Как только выйдет релиз ядра с `ClaimingDeliveryStorage`, класс
+объявит этот интерфейс, и worker сможет выбирать путь через `instanceof`.
+
+### Удержание записей
+
+Больше ничто в этом пакете не удаляет строки доставок — таблица растёт всё
+время, пока живёт приложение:
+
+```php
+$deleted = $deliveries->deleteOlderThan(new DateTimeImmutable('-90 days'));
+```
+
+По умолчанию удаляются только терминальные статусы. Передача
+`WebhookDeliveryStatus::Pending` удалит работу, которая так и не была сделана, —
+это решение вызывающий обязан принять вслух.
+
 ## Миграция
 
 Регистрируйте поставляемую миграцию
@@ -65,6 +118,12 @@ return [
 ```bash
 ./yii migrate:up
 ```
+
+В этом namespace живут две миграции: `M260612000000CreateWebhookTables` создаёт
+обе таблицы, а `M260822120000AddDeliveryClaimColumns` добавляет колонки
+`claimed_at` / `claimed_by`, нужные `claimReady()`. Инсталляция, уже накатившая
+первую, получит только вторую. `down()` второй работает только на MySQL и
+PostgreSQL — `yiisoft/db-sqlite` не умеет удалять колонки.
 
 `yiisoft/db-migration` строит миграцию через `Injector::make()`, поэтому она
 получает value object'ы имён таблиц из контейнера так же, как и хранилища —
@@ -100,10 +159,13 @@ return [
 
 | Метод | Описание |
 |---|---|
-| `save(delivery)` | Вставляет или обновляет запись доставки |
-| `findPending(limit)` | Возвращает ожидающие доставки, отсортированные по времени создания |
-| `markDelivered(delivery)` | Сохраняет доставку как успешно выполненную |
-| `markFailed(delivery)` | Сохраняет доставку как неуспешную |
+| `save(delivery)` | Вставляет доставку либо обновляет состояние попыток уже сохранённой; статус существующей строки не пишет никогда |
+| `findPending(limit)` | Возвращает ожидающие доставки, старейшие первыми — без аренды и без учёта backoff |
+| `claimReady(now, readyThresholds, maxAttempts, leaseSeconds?, limit?)` | Захватывает готовые доставки в аренду этого worker-а |
+| `releaseClaim(delivery)` | Досрочно возвращает аренду; false, если её не было |
+| `markDelivered(delivery)` | Сохраняет доставку как успешную, если она ещё `Pending` |
+| `markFailed(delivery)` | Сохраняет доставку как неуспешную, если она ещё `Pending` |
+| `deleteOlderThan(threshold, ...statuses)` | Удаляет завершённые доставки, созданные раньше порога; возвращает число строк |
 | `getById(id)` | Загружает доставку по ID |
 
 ### DbNonceStorage
@@ -119,6 +181,8 @@ return [
 - `DbNonceStorage::add()` опирается на первичный ключ и перехватывает ошибки дублирования ключа.
 - `DbWebhookDeliveryStorage` сохраняет только данные `WebhookDelivery`, секреты endpoint'ов не хранятся.
 - Держите записи nonce не менее времени, равного допустимому окну временно́й метки webhook'а.
+- При более чем одном worker-е используйте `claimReady()`. `findPending()` выдаёт
+  всем одни и те же строки, и получатель увидит одно событие дважды.
 
 ## Примеры
 

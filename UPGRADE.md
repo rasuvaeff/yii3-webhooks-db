@@ -1,5 +1,26 @@
 # Upgrade guide
 
+## 2.x → next
+
+`DbWebhookDeliveryStorage::claimReady()` reads two new columns. Apply the new
+migration before deploying code that calls it:
+
+```bash
+./yii migrate:up
+```
+
+It adds `claimed_at` and `claimed_by` to the delivery table, both nullable, and
+touches nothing else. `M260612000000CreateWebhookTables` is unchanged, so an
+installation that already ran it only gets
+`M260822120000AddDeliveryClaimColumns`.
+
+Rolling the migration back works on MySQL and PostgreSQL only —
+`yiisoft/db-sqlite` cannot drop a column.
+
+`save()` no longer writes the `status` of a row that already exists. If your
+worker relied on `save()` to move a delivery back to `pending`, use the storage's
+own transitions instead: `markDelivered()`, `markFailed()`, or `releaseClaim()`.
+
 ## 1.x → 2.0
 
 The bundled migration moved into the package namespace:

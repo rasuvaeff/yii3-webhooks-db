@@ -13,6 +13,17 @@ composer require rasuvaeff/yii3-webhooks-db
 - `DbWebhookDeliveryStorage` persists delivery attempts and never stores endpoint secrets.
 - `DbNonceStorage` requires a `Psr\Clock\ClockInterface` instance.
 - Config-plugin DI binds only `WebhookDeliveryStorage` and `NonceStorage`.
+- More than one worker => use `claimReady()`, never `findPending()`: the latter
+  gives every worker the same rows and ignores backoff.
+- Ownership is a lease, not a status: a claimed delivery stays `Pending` and is
+  claimable again once `claimed_at` is older than `leaseSeconds`.
+- `claimReady()` also hands out deliveries with `attempts >= maxAttempts` —
+  nothing else can mark them `Failed`.
+- `save()` never writes the status of a row that already exists; `markDelivered()`
+  / `markFailed()` are a compare-and-set on `pending` and clear the lease.
+- Two migrations: `M260612000000CreateWebhookTables`, then
+  `M260822120000AddDeliveryClaimColumns` (adds `claimed_at`, `claimed_by`).
+- Nothing prunes the delivery table by itself — call `deleteOlderThan()`.
 
 ## API reference
 
@@ -27,4 +38,32 @@ $nonceStorage = new DbNonceStorage(db: $db, clock: $clock, table: 'webhook_nonce
 $deliveryStorage->save(delivery: $delivery);
 $pending = $deliveryStorage->findPending(limit: 100);
 $accepted = $nonceStorage->add(nonce: $signature->getValue());
+```
+
+### Claiming (more than one worker)
+
+```php
+$now = $clock->now();
+
+$batch = $deliveryStorage->claimReady(
+    now: $now,
+    readyThresholds: $policy->readyThresholds($now), // WebhookRetryPolicy, from the core
+    maxAttempts: $policy->getMaxAttempts(),
+    leaseSeconds: 300, // must outlive the slowest delivery attempt
+    limit: 100,
+);
+
+foreach ($batch as $delivery) {
+    // terminate, or give the lease back for a retryable failure
+    $deliveryStorage->markDelivered($delivery->withAttempt($now));
+    // $deliveryStorage->save($delivery->withAttempt($now, error: $error));
+    // $deliveryStorage->releaseClaim($delivery);
+}
+```
+
+### Retention
+
+```php
+// terminal statuses by default; pass statuses explicitly to widen it
+$deleted = $deliveryStorage->deleteOlderThan(new DateTimeImmutable('-90 days'));
 ```

@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+- `DbWebhookDeliveryStorage::claimReady()` and `releaseClaim()`: lease-based
+  claiming, so two workers polling the same table no longer deliver the same
+  webhook twice. The claim also filters by readiness — a backlog of deliveries
+  waiting out their backoff no longer fills every batch while the ready ones
+  behind them starve — and it deliberately hands out deliveries that are out of
+  attempts, because nothing else could ever mark them `Failed`. Ownership is a
+  lease, not a status: a claimed delivery stays `pending` and becomes claimable
+  again once `claimed_at` is older than `leaseSeconds`, so a worker that dies
+  strands nothing. The methods carry the signature of `ClaimingDeliveryStorage`
+  in `rasuvaeff/yii3-webhooks`; the `implements` clause follows the core release
+  that introduces it.
+- **New migration** `M260822120000AddDeliveryClaimColumns` adds the nullable
+  `claimed_at` / `claimed_by` columns the claim needs. Apply it before deploying
+  code that calls `claimReady()` — see [UPGRADE.md](UPGRADE.md). Rolling it back
+  works on MySQL and PostgreSQL only: `yiisoft/db-sqlite` cannot drop a column.
+- **Breaking (behaviour).** `save()` no longer writes the `status` of a delivery
+  that already exists. The upsert used to overwrite every column, so a worker
+  that lost the race and still held a stale `pending` copy put a finished
+  delivery back into the queue and the webhook went out again. Status now belongs
+  to `markDelivered()`/`markFailed()`/the claim; the attempt state is still
+  written.
+- `markDelivered()`/`markFailed()` clear the lease on the terminal transition, so
+  a finished row never looks busy to whoever reads the table.
+- `DbWebhookDeliveryStorage::deleteOlderThan()`: retention for the delivery
+  table, which previously had no supported way to remove finished rows at all —
+  only hand-written SQL around the package. Terminal statuses by default; the
+  existing `(status, created_at)` index serves the query.
+- Tooling: `rasuvaeff/rector-named-literals` in `require-dev` and its rule in
+  `rector.php`; the mutation job in CI has its own narrow paths filter, so a
+  documentation change no longer pays a full mutation run.
+
 ## 2.0.2 — 2026-08-04
 
 ### Fixed
