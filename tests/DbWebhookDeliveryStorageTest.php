@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Rasuvaeff\Yii3WebhooksDb\Tests;
 
 use InvalidArgumentException;
+use Rasuvaeff\Understudy\Understudy;
 use Rasuvaeff\Yii3Webhooks\ClaimingDeliveryStorage;
 use Rasuvaeff\Yii3WebhooksDb\DbWebhookDeliveryStorage;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Test;
+use Yiisoft\Db\Connection\ConnectionInterface;
 
 #[Test]
 #[Covers(DbWebhookDeliveryStorage::class)]
@@ -17,7 +19,7 @@ final class DbWebhookDeliveryStorageTest
 {
     public function rejectsInvalidTableName(): void
     {
-        $db = new FakeConnection(command: new FakeCommand());
+        $db = Understudy::for(ConnectionInterface::class);
 
         try {
             new DbWebhookDeliveryStorage(
@@ -28,6 +30,8 @@ final class DbWebhookDeliveryStorageTest
         } catch (InvalidArgumentException $e) {
             Assert::string($e->getMessage())->contains('Invalid table name "webhook_deliveries; DROP TABLE users"');
         }
+
+        Understudy::unused($db);
     }
 
     /**
@@ -39,8 +43,10 @@ final class DbWebhookDeliveryStorageTest
      */
     public function declaresTheClaimingContractTheCoreDetects(): void
     {
-        $storage = new DbWebhookDeliveryStorage(db: new FakeConnection(command: new FakeCommand()));
+        $db = Understudy::for(ConnectionInterface::class);
+        $storage = new DbWebhookDeliveryStorage(db: $db);
 
         Assert::instanceOf($storage, ClaimingDeliveryStorage::class);
+        Understudy::unused($db);
     }
 }
