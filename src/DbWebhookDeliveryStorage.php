@@ -78,8 +78,9 @@ final readonly class DbWebhookDeliveryStorage implements WebhookDeliveryStorage,
     }
 
     #[\Override]
-    public function findPending(int $limit = 100): array
-    {
+    public function findPending(
+        int $limit = 100,
+    ): array {
         /** @var list<array<array-key, mixed>> $rows */
         $rows = (new Query($this->db))
             ->from($this->table)
