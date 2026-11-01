@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Mutation testing now counts uncovered code (`--with-uncovered`, template mutator settings): overall MSI 98% before the change, 100% after, against `minMsi` 100. `DbWebhookDeliveryStorage::findPending()` signature reformatted to one parameter per line (no behaviour change) so the template ignore pattern matches its `$limit = 100` default. No tests added.
+
 ## 3.0.0 — 2026-08-22
 
 **Breaking.** See [UPGRADE.md](UPGRADE.md): this release requires
